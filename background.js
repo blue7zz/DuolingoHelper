@@ -139,4 +139,44 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     });
     return true; // 异步
   }
+
+  if (msg.type === "DEEPSEEK_FOLLOWUP") {
+    const originalSentence = msg.originalSentence || "";
+    const followupQuestion = msg.followupQuestion || "";
+    
+    chrome.storage.sync.get([
+      "deepseekApiKey",
+      "systemPrompt",
+      "userPrompt", 
+      "model",
+      "temperature",
+      "enableMarkdown"
+    ], async (cfg) => {
+      try {
+        // 为追问构建特殊的提示词
+        const followupPrompt = `原句：${originalSentence}
+
+用户追问：${followupQuestion}
+
+请针对用户的追问给出详细回答。保持回答简洁实用。`;
+
+        const res = await callDeepseek({
+          apiKey: cfg.deepseekApiKey,
+          systemPrompt: cfg.systemPrompt || DEFAULT_SYSTEM_PROMPT,
+          userPrompt: followupPrompt,
+          model: cfg.model,
+          temperature: (cfg.temperature !== undefined ? Number(cfg.temperature) : undefined),
+          enableMarkdown: cfg.enableMarkdown
+        }, followupQuestion);
+
+        sendResponse({
+          ok: true,
+          explanation: res.content
+        });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    });
+    return true; // 异步
+  }
 });

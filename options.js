@@ -12,8 +12,18 @@ const els = {
   msg: document.getElementById("msg"),
   classFragments: document.getElementById("classFragments"),
   newClassFragment: document.getElementById("newClassFragment"),
-  addFragmentBtn: document.getElementById("addFragmentBtn")
+  addFragmentBtn: document.getElementById("addFragmentBtn"),
+  clearHistoryBtn: document.getElementById("clearHistoryBtn"),
+  exportBookmarksBtn: document.getElementById("exportBookmarksBtn"),
+  viewHistoryBtn: document.getElementById("viewHistoryBtn"),
+  historyStats: document.getElementById("historyStats"),
+  historyViewer: document.getElementById("historyViewer"),
+  historyList: document.getElementById("historyList")
 };
+
+// 历史记录相关变量
+let historyItems = [];
+let historyVisible = false;
 
 const DEFAULT_SYSTEM_PROMPT = `你是一个专业的语言学习助手。请遵守：
 1. 解释简洁分层。
@@ -164,6 +174,12 @@ chrome.storage.sync.get([
   renderClassFragments();
 });
 
+// 加载历史记录
+chrome.storage.local.get(["duolingoHistory"], (result) => {
+  historyItems = result.duolingoHistory || [];
+  updateHistoryStats();
+});
+
 // 保存
 els.saveBtn.addEventListener("click", () => {
   const data = {
@@ -217,5 +233,137 @@ els.newClassFragment.addEventListener("keydown", (e) => {
   }
 });
 
+// 历史记录管理事件监听
+els.clearHistoryBtn.addEventListener("click", clearAllHistory);
+els.exportBookmarksBtn.addEventListener("click", exportBookmarks);
+els.viewHistoryBtn.addEventListener("click", toggleHistoryViewer);
+
 // 将函数暴露到全局作用域，供 HTML 中的 onclick 使用
 window.removeClassFragment = removeClassFragment;
+
+// 历史记录管理函数
+function updateHistoryStats() {
+  const total = historyItems.length;
+  const bookmarked = historyItems.filter(item => item.bookmarked).length;
+  const withFollowups = historyItems.filter(item => item.followUps && item.followUps.length > 0).length;
+  
+  els.historyStats.innerHTML = `
+    总记录: <strong>${total}</strong> | 
+    已收藏: <strong>${bookmarked}</strong> | 
+    有追问: <strong>${withFollowups}</strong>
+  `;
+}
+
+function renderHistoryList() {
+  if (historyItems.length === 0) {
+    els.historyList.innerHTML = '<div class="history-empty">暂无历史记录</div>';
+    return;
+  }
+  
+  const sortedItems = [...historyItems].sort((a, b) => {
+    // 先按收藏状态排序，再按时间排序
+    if (a.bookmarked !== b.bookmarked) {
+      return b.bookmarked ? 1 : -1;
+    }
+    return new Date(b.timestamp) - new Date(a.timestamp);
+  });
+  
+  els.historyList.innerHTML = sortedItems.map((item, index) => {
+    const date = new Date(item.timestamp).toLocaleString('zh-CN');
+    const followupCount = item.followUps ? item.followUps.length : 0;
+    
+    return `
+      <div class="history-item ${item.bookmarked ? 'bookmarked' : ''}">
+        <div class="history-content">
+          <div class="history-sentence">${escapeHtml(item.sentence)}</div>
+          <div class="history-meta">
+            ${date}
+            ${followupCount > 0 ? `<span class="history-followups">• ${followupCount} 条追问</span>` : ''}
+          </div>
+        </div>
+        <div class="history-actions">
+          ${item.bookmarked ? '<span class="history-bookmark">★</span>' : ''}
+          <button onclick="deleteHistoryItem('${item.id}')" style="background: #ef4444; color: white; border: none; border-radius: 3px; padding: 2px 6px; font-size: 11px; cursor: pointer;">删除</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleHistoryViewer() {
+  historyVisible = !historyVisible;
+  if (historyVisible) {
+    renderHistoryList();
+    els.historyViewer.style.display = 'block';
+    els.viewHistoryBtn.textContent = '隐藏历史记录';
+  } else {
+    els.historyViewer.style.display = 'none';
+    els.viewHistoryBtn.textContent = '查看历史记录';
+  }
+}
+
+function clearAllHistory() {
+  if (!confirm('确定要清空所有历史记录吗？此操作不可恢复。')) {
+    return;
+  }
+  
+  historyItems = [];
+  chrome.storage.local.set({ duolingoHistory: [] }, () => {
+    updateHistoryStats();
+    if (historyVisible) {
+      renderHistoryList();
+    }
+    showMsg('已清空所有历史记录', '#ef4444');
+  });
+}
+
+function exportBookmarks() {
+  const bookmarkedItems = historyItems.filter(item => item.bookmarked);
+  if (bookmarkedItems.length === 0) {
+    showMsg('没有收藏的记录可导出', '#dc2626');
+    return;
+  }
+  
+  // 构建导出数据
+  const exportData = {
+    exportTime: new Date().toISOString(),
+    totalItems: bookmarkedItems.length,
+    items: bookmarkedItems.map(item => ({
+      sentence: item.sentence,
+      explanation: item.explanation,
+      timestamp: item.timestamp,
+      followUps: item.followUps || []
+    }))
+  };
+  
+  // 创建并下载文件
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `duolingo-bookmarks-${new Date().toISOString().split('T')[0]}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  showMsg(`已导出 ${bookmarkedItems.length} 条收藏记录`, '#16a34a');
+}
+
+function deleteHistoryItem(itemId) {
+  if (!confirm('确定要删除这条记录吗？')) {
+    return;
+  }
+  
+  historyItems = historyItems.filter(item => item.id !== itemId);
+  chrome.storage.local.set({ duolingoHistory: historyItems }, () => {
+    updateHistoryStats();
+    if (historyVisible) {
+      renderHistoryList();
+    }
+    showMsg('已删除记录', '#ef4444');
+  });
+}
+
+// 暴露删除函数到全局作用域
+window.deleteHistoryItem = deleteHistoryItem;

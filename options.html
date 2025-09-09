@@ -86,6 +86,22 @@
       text-align: center; color: #64748b; font-size: 13px; padding: 12px;
       font-style: italic;
     }
+    .history-item {
+      padding: 8px 12px; border-bottom: 1px solid #e2e8f0;
+      display: flex; justify-content: space-between; align-items: flex-start;
+    }
+    .history-item:last-child { border-bottom: none; }
+    .history-content { flex: 1; margin-right: 12px; }
+    .history-sentence { font-weight: 600; margin-bottom: 4px; }
+    .history-meta { font-size: 12px; color: #64748b; }
+    .history-actions { display: flex; gap: 6px; align-items: center; }
+    .history-bookmark { color: #fbbf24; font-size: 14px; }
+    .history-followups { font-size: 11px; color: #475569; }
+    .history-item.bookmarked { background: #fef3c7; }
+    .history-empty {
+      text-align: center; color: #64748b; font-size: 13px; padding: 20px;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -165,6 +181,27 @@
   
   <div class="small" style="margin-top: 8px; color: #475569;">
     <strong>提示：</strong>默认使用 <code class="inline">_2jz5U</code>。如果 Duolingo 更新了页面结构，可以通过浏览器开发者工具查找正确答案节点的 class 名称，然后添加相应的片段。
+  </div>
+
+  <h2>历史记录管理</h2>
+  <p class="small">管理已解析的句子历史记录和收藏的内容。</p>
+  
+  <div class="inline-field">
+    <button id="clearHistoryBtn" class="secondary">清空所有历史记录</button>
+    <button id="exportBookmarksBtn">导出收藏记录</button>
+    <button id="viewHistoryBtn" class="outline">查看历史记录</button>
+  </div>
+  
+  <div id="historyStats" class="small" style="margin-top: 12px; color: #64748b;">
+    <!-- 动态显示统计信息 -->
+  </div>
+  
+  <div id="historyViewer" style="display: none; margin-top: 16px;">
+    <div style="max-height: 300px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+      <div id="historyList">
+        <!-- 动态生成历史记录列表 -->
+      </div>
+    </div>
   </div>
 
   <div style="margin-top:24px;">

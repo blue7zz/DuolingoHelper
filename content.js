@@ -8,6 +8,9 @@ let autoExplain = false;
 const seenSentences = new Set(); // 已出现的句子（包含手动与自动）
 const highlightTimeouts = new Map();
 
+// History management
+let historyItems = []; // 历史记录缓存
+
 // 加载配置
 chrome.storage.sync.get(["enableMarkdown", "autoExplain", "customClassFragments"], cfg => {
   if (cfg.enableMarkdown !== undefined) enableMarkdown = cfg.enableMarkdown;
@@ -17,6 +20,11 @@ chrome.storage.sync.get(["enableMarkdown", "autoExplain", "customClassFragments"
   if (cfg.customClassFragments && cfg.customClassFragments.length > 0) {
     TARGET_CLASS_FRAGMENTS = [...cfg.customClassFragments];
   }
+});
+
+// 加载历史记录
+chrome.storage.local.get(["duolingoHistory"], (result) => {
+  historyItems = result.duolingoHistory || [];
 });
 
 function ensurePanel() {
@@ -131,37 +139,73 @@ function addCandidate(sentence, opts = {}) {
     <div class="ddp-actions">
       <button class="ddp-explain-btn">解析</button>
       <button class="ddp-regenerate-btn" style="display:none;">重新生成</button>
+      <button class="ddp-bookmark-btn" title="收藏到历史记录">★</button>
     </div>
     <div class="ddp-status"></div>
     <div class="ddp-explanation-block" style="display:none;"></div>
+    <div class="ddp-followup-section" style="display:none;">
+      <div class="ddp-followup-input">
+        <input type="text" placeholder="继续追问..." class="ddp-followup-text" />
+        <button class="ddp-followup-submit">发送</button>
+      </div>
+      <div class="ddp-followup-history"></div>
+    </div>
   `;
 
   const explainBtn = container.querySelector(".ddp-explain-btn");
   const regenBtn = container.querySelector(".ddp-regenerate-btn");
+  const bookmarkBtn = container.querySelector(".ddp-bookmark-btn");
   const statusEl = container.querySelector(".ddp-status");
   const blockEl = container.querySelector(".ddp-explanation-block");
+  const followupSection = container.querySelector(".ddp-followup-section");
+  const followupInput = container.querySelector(".ddp-followup-text");
+  const followupSubmit = container.querySelector(".ddp-followup-submit");
+  const followupHistory = container.querySelector(".ddp-followup-history");
 
   explainBtn.addEventListener("click", () => {
-    requestExplanation(sentence, { container, statusEl, blockEl, explainBtn, regenBtn, first: true });
+    requestExplanation(sentence, { container, statusEl, blockEl, explainBtn, regenBtn, first: true, followupSection });
   });
 
   regenBtn.addEventListener("click", () => {
-    requestExplanation(sentence, { container, statusEl, blockEl, explainBtn, regenBtn, first: false, regenerate: true });
+    requestExplanation(sentence, { container, statusEl, blockEl, explainBtn, regenBtn, first: false, regenerate: true, followupSection });
+  });
+
+  bookmarkBtn.addEventListener("click", () => {
+    toggleBookmark(sentence, container, bookmarkBtn);
+  });
+
+  followupSubmit.addEventListener("click", () => {
+    submitFollowup(sentence, followupInput.value.trim(), followupHistory, followupInput);
+  });
+
+  followupInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      followupSubmit.click();
+    }
   });
 
   list.prepend(container);
   ensurePanel().style.display = "flex";
   highlight(container);
 
+  // 检查收藏状态
+  const historyItem = historyItems.find(h => h.sentence === sentence);
+  if (historyItem && historyItem.bookmarked) {
+    bookmarkBtn.textContent = "★";
+    bookmarkBtn.style.color = "#fbbf24";
+    bookmarkBtn.title = "已收藏";
+  }
+
   if (autoStart) {
-    requestExplanation(sentence, { container, statusEl, blockEl, explainBtn, regenBtn, first: true });
+    requestExplanation(sentence, { container, statusEl, blockEl, explainBtn, regenBtn, first: true, followupSection });
   }
 
   return container;
 }
 
 function requestExplanation(sentence, ctx) {
-  const { statusEl, blockEl, explainBtn, regenBtn } = ctx;
+  const { statusEl, blockEl, explainBtn, regenBtn, followupSection } = ctx;
   statusEl.innerHTML = `<span class="spinner"></span> 正在请求...`;
   blockEl.style.display = "none";
   explainBtn.disabled = true;
@@ -186,6 +230,14 @@ function requestExplanation(sentence, ctx) {
         blockEl.style.display = "block";
         regenBtn.style.display = "inline-block";
         regenBtn.disabled = false;
+        
+        // 显示追问区域
+        if (followupSection) {
+          followupSection.style.display = "block";
+        }
+        
+        // 保存到历史记录
+        saveToHistory(sentence, resp.explanation);
       } else {
         statusEl.innerHTML = `<span class="ddp-error">${escapeHtml(resp.error || "未知错误")}</span>`;
         regenBtn.style.display = "inline-block";
@@ -294,6 +346,103 @@ function hash(str) {
     h = (h << 5) - h + str.charCodeAt(i++) | 0;
   }
   return "h" + (h >>> 0).toString(16);
+}
+
+// 保存到历史记录
+function saveToHistory(sentence, explanation) {
+  const id = Date.now().toString();
+  const historyItem = {
+    id,
+    sentence,
+    explanation,
+    bookmarked: false,
+    timestamp: new Date().toISOString(),
+    followUps: []
+  };
+  
+  historyItems.unshift(historyItem);
+  // 限制历史记录数量，保留最近的500条
+  if (historyItems.length > 500) {
+    historyItems = historyItems.slice(0, 500);
+  }
+  
+  chrome.storage.local.set({ duolingoHistory: historyItems });
+}
+
+// 切换收藏状态
+function toggleBookmark(sentence, container, bookmarkBtn) {
+  const item = historyItems.find(h => h.sentence === sentence);
+  if (!item) {
+    // 如果历史记录中没有这个项目，先创建一个
+    saveToHistory(sentence, "");
+    const newItem = historyItems.find(h => h.sentence === sentence);
+    if (newItem) {
+      newItem.bookmarked = true;
+    }
+  } else {
+    item.bookmarked = !item.bookmarked;
+  }
+  
+  chrome.storage.local.set({ duolingoHistory: historyItems });
+  
+  // 更新按钮显示
+  const isBookmarked = item ? item.bookmarked : true;
+  bookmarkBtn.textContent = isBookmarked ? "★" : "☆";
+  bookmarkBtn.title = isBookmarked ? "已收藏" : "收藏到历史记录";
+  
+  // 添加视觉反馈
+  bookmarkBtn.style.color = isBookmarked ? "#fbbf24" : "#9ca3af";
+}
+
+// 提交追问
+function submitFollowup(sentence, followupQuestion, followupHistory, inputEl) {
+  if (!followupQuestion) {
+    inputEl.focus();
+    return;
+  }
+  
+  // 添加加载状态
+  const loadingDiv = document.createElement("div");
+  loadingDiv.className = "ddp-followup-item";
+  loadingDiv.innerHTML = `
+    <div class="ddp-followup-question">${escapeHtml(followupQuestion)}</div>
+    <div class="ddp-followup-answer"><span class="spinner"></span> 正在回答...</div>
+  `;
+  followupHistory.appendChild(loadingDiv);
+  
+  // 清空输入框
+  inputEl.value = "";
+  
+  // 发送请求
+  chrome.runtime.sendMessage(
+    { 
+      type: "DEEPSEEK_FOLLOWUP", 
+      originalSentence: sentence,
+      followupQuestion: followupQuestion 
+    },
+    (resp) => {
+      const answerDiv = loadingDiv.querySelector(".ddp-followup-answer");
+      if (!resp || !resp.ok) {
+        answerDiv.innerHTML = `<span class="ddp-error">${escapeHtml(resp?.error || "请求失败")}</span>`;
+        return;
+      }
+      
+      const html = enableMarkdown ? simpleMarkdown(resp.explanation)
+        : `<pre style="white-space:pre-wrap;font-family:inherit;">${escapeHtml(resp.explanation)}</pre>`;
+      answerDiv.innerHTML = html;
+      
+      // 保存追问到历史记录
+      const historyItem = historyItems.find(h => h.sentence === sentence);
+      if (historyItem) {
+        historyItem.followUps.push({
+          question: followupQuestion,
+          answer: resp.explanation,
+          timestamp: new Date().toISOString()
+        });
+        chrome.storage.local.set({ duolingoHistory: historyItems });
+      }
+    }
+  );
 }
 
 function highlight(el) {
