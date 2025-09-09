@@ -21,7 +21,7 @@ function ensurePanel() {
     panel.innerHTML = `
       <div class="ddp-header">
         <span>Deepseek 解析</span>
-        <button id="ddp-close-btn" title="关闭">×</button>
+        <button id="ddp-toggle-btn" title="收起">‹</button>
       </div>
       <div class="ddp-body">
         <div class="ddp-manual">
@@ -38,11 +38,32 @@ function ensurePanel() {
       <div class="ddp-footer">
         <small style="opacity:.7;">Duolingo Deepseek Helper</small>
       </div>
+      <div class="ddp-expand-btn" id="ddp-expand-btn" title="打开" style="display: none;">›</div>
     `;
     document.body.appendChild(panel);
-    document.getElementById("ddp-close-btn").addEventListener("click", () => {
-      panel.style.display = "none";
-    });
+    
+    // Toggle functionality for collapse/expand
+    const toggleBtn = document.getElementById("ddp-toggle-btn");
+    const expandBtn = document.getElementById("ddp-expand-btn");
+    
+    function togglePanel() {
+      if (panel.classList.contains("collapsed")) {
+        // Expand
+        panel.classList.remove("collapsed");
+        toggleBtn.textContent = "‹";
+        toggleBtn.title = "收起";
+        expandBtn.style.display = "none";
+      } else {
+        // Collapse
+        panel.classList.add("collapsed");
+        toggleBtn.textContent = "›";
+        toggleBtn.title = "展开";
+        expandBtn.style.display = "block";
+      }
+    }
+    
+    toggleBtn.addEventListener("click", togglePanel);
+    expandBtn.addEventListener("click", togglePanel);
 
     // 绑定手动输入事件
     const inputEl = panel.querySelector("#ddp-manual-input");
