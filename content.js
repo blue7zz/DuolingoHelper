@@ -251,8 +251,15 @@ function checkNode(node) {
   }
 }
 
+function containsChinese(text) {
+  // Check for Chinese characters (CJK unified ideographs)
+  return /[\u4e00-\u9fff]/.test(text);
+}
+
 function isLikelyValidSentence(text) {
   if (text.length < 2) return false;
+  // Filter out sentences containing Chinese characters
+  if (containsChinese(text)) return false;
   return true;
 }
 
