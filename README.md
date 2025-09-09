@@ -1,4 +1,5 @@
 # Duolingo Deepseek Helper
+<img width="2994" height="1594" alt="image" src="https://github.com/user-attachments/assets/ad1f9350-e015-4a61-a8d5-9b6babcc4c65" />
 
 答错题后自动捕获多邻国页面上显示的**正确答案句子**，调用 Deepseek API 生成翻译、语法讲解、扩展例句等，并在左侧浮动面板展示。
 
