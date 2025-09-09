@@ -8,10 +8,136 @@ let autoExplain = false;
 const seenSentences = new Set(); // 已出现的句子（包含手动与自动）
 const highlightTimeouts = new Map();
 
+// Text-to-speech configuration and state
+let ttsConfig = {
+  enabled: true,
+  rate: 1.0,
+  pitch: 1.0,
+  volume: 0.8,
+  preferredVoice: null
+};
+
+// Load TTS configuration
+chrome.storage.sync.get(["ttsConfig"], cfg => {
+  if (cfg.ttsConfig) {
+    ttsConfig = { ...ttsConfig, ...cfg.ttsConfig };
+  }
+});
+
+// Text-to-speech functionality
+function playTextToSpeech(text, playBtn) {
+  if (!ttsConfig.enabled) {
+    return;
+  }
+
+  // Check if speech synthesis is supported
+  if (!('speechSynthesis' in window)) {
+    console.warn('Text-to-speech not supported in this browser');
+    return;
+  }
+
+  // Stop any ongoing speech
+  speechSynthesis.cancel();
+
+  // Update button state
+  playBtn.disabled = true;
+  playBtn.textContent = "🔊";
+  playBtn.title = "播放中...";
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  
+  // Configure utterance
+  utterance.rate = ttsConfig.rate;
+  utterance.pitch = ttsConfig.pitch;
+  utterance.volume = ttsConfig.volume;
+
+  // Try to select appropriate voice based on language detection
+  const detectedLang = detectLanguage(text);
+  const voice = selectBestVoice(detectedLang);
+  if (voice) {
+    utterance.voice = voice;
+    utterance.lang = voice.lang;
+  }
+
+  // Event handlers
+  utterance.onstart = () => {
+    playBtn.textContent = "⏸️";
+    playBtn.title = "播放中 (点击停止)";
+    playBtn.onclick = () => {
+      speechSynthesis.cancel();
+    };
+  };
+
+  utterance.onend = () => {
+    resetPlayButton(playBtn, text);
+  };
+
+  utterance.onerror = (event) => {
+    console.warn('Text-to-speech error:', event.error);
+    resetPlayButton(playBtn, text);
+  };
+
+  // Start speaking
+  speechSynthesis.speak(utterance);
+}
+
+function resetPlayButton(playBtn, text) {
+  playBtn.disabled = false;
+  playBtn.textContent = "🔊";
+  playBtn.title = "播放语音";
+  playBtn.onclick = () => {
+    playTextToSpeech(text, playBtn);
+  };
+}
+
+function selectBestVoice(detectedLang) {
+  const voices = speechSynthesis.getVoices();
+  if (voices.length === 0) return null;
+
+  // Language preferences mapping
+  const langMap = {
+    'English/Latin-like': ['en-US', 'en-GB', 'en'],
+    'Spanish-like': ['es-ES', 'es-US', 'es'],
+    'French-like': ['fr-FR', 'fr'],
+    'Chinese': ['zh-CN', 'zh-TW', 'zh'],
+    'Unknown': ['en-US', 'en']
+  };
+
+  const preferredLangs = langMap[detectedLang] || ['en-US', 'en'];
+  
+  // First try to find user's preferred voice if set
+  if (ttsConfig.preferredVoice) {
+    const preferredVoice = voices.find(v => v.name === ttsConfig.preferredVoice);
+    if (preferredVoice) return preferredVoice;
+  }
+
+  // Try to find the best voice for detected language
+  for (const lang of preferredLangs) {
+    // Look for neural or premium voices first
+    const neuralVoice = voices.find(v => 
+      v.lang.startsWith(lang) && 
+      (v.name.includes('Neural') || v.name.includes('Premium') || v.name.includes('Enhanced'))
+    );
+    if (neuralVoice) return neuralVoice;
+
+    // Fall back to any voice for this language
+    const anyVoice = voices.find(v => v.lang.startsWith(lang));
+    if (anyVoice) return anyVoice;
+  }
+
+  // Final fallback to default voice
+  return voices[0];
+}
+
 // 加载配置
-chrome.storage.sync.get(["enableMarkdown", "autoExplain", "customClassFragments"], cfg => {
+chrome.storage.sync.get(["enableMarkdown", "autoExplain", "customClassFragments", "ttsConfig"], cfg => {
   if (cfg.enableMarkdown !== undefined) enableMarkdown = cfg.enableMarkdown;
   autoExplain = cfg.autoExplain === true;
+  
+  // Load TTS configuration
+  if (cfg.ttsConfig) {
+    ttsConfig = { ...ttsConfig, ...cfg.ttsConfig };
+  }
   
   // 加载自定义 class 片段
   if (cfg.customClassFragments && cfg.customClassFragments.length > 0) {
@@ -127,7 +253,10 @@ function addCandidate(sentence, opts = {}) {
   container.dataset.manual = manual ? "1" : "0";
 
   container.innerHTML = `
-    <div class="ddp-sentence">${escapeHtml(sentence)}</div>
+    <div class="ddp-sentence">
+      ${escapeHtml(sentence)}
+      <button class="ddp-play-btn" title="播放语音">🔊</button>
+    </div>
     <div class="ddp-actions">
       <button class="ddp-explain-btn">解析</button>
       <button class="ddp-regenerate-btn" style="display:none;">重新生成</button>
@@ -150,6 +279,7 @@ function addCandidate(sentence, opts = {}) {
   const explainBtn = container.querySelector(".ddp-explain-btn");
   const regenBtn = container.querySelector(".ddp-regenerate-btn");
   const recordBtn = container.querySelector(".ddp-record-btn");
+  const playBtn = container.querySelector(".ddp-play-btn");
   const statusEl = container.querySelector(".ddp-status");
   const blockEl = container.querySelector(".ddp-explanation-block");
   const contentEl = container.querySelector(".ddp-explanation-content");
@@ -169,6 +299,10 @@ function addCandidate(sentence, opts = {}) {
 
   recordBtn.addEventListener("click", () => {
     toggleRecordProblem(sentence, contentEl, recordBtn, container);
+  });
+
+  playBtn.addEventListener("click", () => {
+    playTextToSpeech(sentence, playBtn);
   });
 
   // Follow-up question event handlers
@@ -489,6 +623,21 @@ function highlight(el) {
   el.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
+// Initialize TTS voices
+function initializeTTS() {
+  if ('speechSynthesis' in window) {
+    // Load voices if not already loaded
+    let voices = speechSynthesis.getVoices();
+    if (voices.length === 0) {
+      speechSynthesis.addEventListener('voiceschanged', () => {
+        voices = speechSynthesis.getVoices();
+        console.log('TTS voices loaded:', voices.length);
+      });
+    }
+  }
+}
+
 // 初始化
 ensurePanel();
 initObserver();
+initializeTTS();
