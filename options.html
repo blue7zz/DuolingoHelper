@@ -86,6 +86,36 @@
       text-align: center; color: #64748b; font-size: 13px; padding: 12px;
       font-style: italic;
     }
+    .recorded-problems-container {
+      border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;
+      max-height: 400px; overflow-y: auto; margin-top: 12px;
+    }
+    .recorded-problem-item {
+      padding: 12px; border-bottom: 1px solid #e2e8f0; position: relative;
+    }
+    .recorded-problem-item:last-child {
+      border-bottom: none;
+    }
+    .recorded-problem-sentence {
+      font-weight: 600; margin-bottom: 8px; color: #1e293b;
+    }
+    .recorded-problem-explanation {
+      background: #f8fafc; padding: 8px; border-radius: 4px; font-size: 13px;
+      line-height: 1.4; color: #475569; max-height: 100px; overflow-y: auto;
+    }
+    .recorded-problem-meta {
+      font-size: 11px; color: #64748b; margin-top: 6px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .recorded-problem-delete {
+      background: #ef4444; color: white; border: none; border-radius: 3px;
+      padding: 4px 8px; font-size: 11px; cursor: pointer;
+    }
+    .recorded-problem-delete:hover { background: #dc2626; }
+    .recorded-problems-empty {
+      text-align: center; color: #64748b; font-size: 13px; padding: 24px;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -165,6 +195,19 @@
   
   <div class="small" style="margin-top: 8px; color: #475569;">
     <strong>提示：</strong>默认使用 <code class="inline">_2jz5U</code>。如果 Duolingo 更新了页面结构，可以通过浏览器开发者工具查找正确答案节点的 class 名称，然后添加相应的片段。
+  </div>
+
+  <h2>记录的问题</h2>
+  <p class="small">已记录的问题和解析，可以导出或清空。</p>
+  
+  <div class="inline-field">
+    <button id="exportProblemsBtn" class="outline">导出记录</button>
+    <button id="clearProblemsBtn" class="secondary">清空所有记录</button>
+    <span id="problemsCount" class="small" style="margin-left: 12px;">加载中...</span>
+  </div>
+  
+  <div id="recordedProblemsList" class="recorded-problems-container">
+    <!-- 动态生成的记录问题列表 -->
   </div>
 
   <div style="margin-top:24px;">
