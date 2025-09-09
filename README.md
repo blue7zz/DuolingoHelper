@@ -8,6 +8,7 @@
 - 将句子发送给后台 Service Worker，调用 Deepseek Chat Completion
 - 左侧固定面板显示：原句 + Markdown 解析 (简单替换，可自行接入更完善的 Markdown 解析器)
 - 可在扩展选项页面设置 Deepseek API Key
+- **中文内容过滤**：可选择排除包含中文字符的句子，避免发送给AI处理（默认启用）
 
 ## 安装步骤
 1. 克隆或下载本仓库。
