@@ -1,4 +1,4 @@
-// 读取/保存设置（新增 autoExplain 和 customClassFragments）
+// 读取/保存设置（新增 autoExplain, excludeChinese 和 customClassFragments）
 const els = {
   apiKey: document.getElementById("apiKey"),
   systemPrompt: document.getElementById("systemPrompt"),
@@ -7,6 +7,7 @@ const els = {
   temperature: document.getElementById("temperature"),
   enableMarkdown: document.getElementById("enableMarkdown"),
   autoExplain: document.getElementById("autoExplain"),
+  excludeChinese: document.getElementById("excludeChinese"),
   saveBtn: document.getElementById("saveBtn"),
   restoreBtn: document.getElementById("restoreBtn"),
   msg: document.getElementById("msg"),
@@ -147,6 +148,7 @@ chrome.storage.sync.get([
   "temperature",
   "enableMarkdown",
   "autoExplain",
+  "excludeChinese",
   "customClassFragments"
 ], (cfg) => {
   els.apiKey.value = cfg.deepseekApiKey || "";
@@ -156,6 +158,7 @@ chrome.storage.sync.get([
   els.temperature.value = (cfg.temperature !== undefined ? cfg.temperature : 0.4);
   els.enableMarkdown.checked = cfg.enableMarkdown !== false;
   els.autoExplain.checked = cfg.autoExplain === true; // 默认 false
+  els.excludeChinese.checked = cfg.excludeChinese !== false; // 默认 true
   
   // 加载自定义 class 片段
   currentClassFragments = cfg.customClassFragments && cfg.customClassFragments.length > 0 
@@ -174,6 +177,7 @@ els.saveBtn.addEventListener("click", () => {
     temperature: parseFloat(els.temperature.value) || 0.4,
     enableMarkdown: els.enableMarkdown.checked,
     autoExplain: els.autoExplain.checked,
+    excludeChinese: els.excludeChinese.checked,
     customClassFragments: [...currentClassFragments]
   };
   chrome.storage.sync.set(data, () => showMsg("已保存", "green"));

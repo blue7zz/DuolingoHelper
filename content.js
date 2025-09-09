@@ -9,7 +9,7 @@ const seenSentences = new Set(); // 已出现的句子（包含手动与自动�
 const highlightTimeouts = new Map();
 
 // 加载配置
-chrome.storage.sync.get(["enableMarkdown", "autoExplain", "customClassFragments"], cfg => {
+chrome.storage.sync.get(["enableMarkdown", "autoExplain", "excludeChinese", "customClassFragments"], cfg => {
   if (cfg.enableMarkdown !== undefined) enableMarkdown = cfg.enableMarkdown;
   autoExplain = cfg.autoExplain === true;
   

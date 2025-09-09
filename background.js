@@ -97,6 +97,11 @@ function detectLanguage(text) {
   return "Unknown";
 }
 
+// 检查文本是否包含中文字符
+function hasChinese(text) {
+  return /[\u4e00-\u9fff]/.test(text);
+}
+
 // 模板渲染
 function renderTemplate(tpl, vars) {
   return tpl.replace(/\{\{(.*?)\}\}/g, (_, k) => {
@@ -114,9 +119,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       "userPrompt",
       "model",
       "temperature",
-      "enableMarkdown"
+      "enableMarkdown",
+      "excludeChinese"
     ], async (cfg) => {
       try {
+        // Check if Chinese filtering is enabled and sentence contains Chinese
+        if (cfg.excludeChinese !== false && hasChinese(sentence)) {
+          sendResponse({ 
+            ok: false, 
+            error: "包含中文字符的句子已被过滤，不会发送给AI进行处理" 
+          });
+          return;
+        }
+
         const res = await callDeepseek({
           apiKey: cfg.deepseekApiKey,
             systemPrompt: cfg.systemPrompt,
