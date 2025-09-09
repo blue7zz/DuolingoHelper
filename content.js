@@ -90,6 +90,17 @@ function resetPlayButton(playBtn, text) {
   };
 }
 
+// Language detection function (copied from background.js)
+function detectLanguage(text) {
+  // 简单判断：包含汉字范围
+  if (/[\u4e00-\u9fff]/.test(text)) return "Chinese";
+  // 含大量拉丁字母 + 空格
+  if (/^[A-Za-z0-9 ,.'";:!?()-]+$/.test(text)) return "English/Latin-like";
+  if (/[áéíóúñ¿¡]/i.test(text)) return "Spanish-like";
+  if (/[àâçéèêëîïôûùüÿœæ]/i.test(text)) return "French-like";
+  return "Unknown";
+}
+
 function selectBestVoice(detectedLang) {
   const voices = speechSynthesis.getVoices();
   if (voices.length === 0) return null;
