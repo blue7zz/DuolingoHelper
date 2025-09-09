@@ -1,4 +1,4 @@
-// 读取/保存设置（新增 autoExplain）
+// 读取/保存设置（新增 autoExplain 和 customClassFragments）
 const els = {
   apiKey: document.getElementById("apiKey"),
   systemPrompt: document.getElementById("systemPrompt"),
@@ -9,7 +9,10 @@ const els = {
   autoExplain: document.getElementById("autoExplain"),
   saveBtn: document.getElementById("saveBtn"),
   restoreBtn: document.getElementById("restoreBtn"),
-  msg: document.getElementById("msg")
+  msg: document.getElementById("msg"),
+  classFragments: document.getElementById("classFragments"),
+  newClassFragment: document.getElementById("newClassFragment"),
+  addFragmentBtn: document.getElementById("addFragmentBtn")
 };
 
 const DEFAULT_SYSTEM_PROMPT = `你是一个专业的语言学习助手。请遵守：
@@ -78,6 +81,63 @@ const PRESETS = {
   }
 };
 
+// 默认 class 片段
+const DEFAULT_CLASS_FRAGMENTS = ["_2jz5U"];
+
+// 当前的 class 片段列表
+let currentClassFragments = [...DEFAULT_CLASS_FRAGMENTS];
+
+// 渲染 class 片段列表
+function renderClassFragments() {
+  if (currentClassFragments.length === 0) {
+    els.classFragments.innerHTML = '<div class="class-fragments-empty">暂无自定义 class 片段</div>';
+    return;
+  }
+  
+  els.classFragments.innerHTML = currentClassFragments.map((fragment, index) => `
+    <div class="class-fragment-item">
+      <code>${escapeHtml(fragment)}</code>
+      <button onclick="removeClassFragment(${index})" title="删除">删除</button>
+    </div>
+  `).join('');
+}
+
+// 添加 class 片段
+function addClassFragment() {
+  const fragment = els.newClassFragment.value.trim();
+  if (!fragment) {
+    els.newClassFragment.focus();
+    return;
+  }
+  
+  if (currentClassFragments.includes(fragment)) {
+    showMsg("该 class 片段已存在", "#dc2626");
+    els.newClassFragment.select();
+    return;
+  }
+  
+  currentClassFragments.push(fragment);
+  els.newClassFragment.value = "";
+  renderClassFragments();
+  showMsg("已添加 class 片段（记得保存）", "#16a34a");
+}
+
+// 删除 class 片段
+function removeClassFragment(index) {
+  if (index >= 0 && index < currentClassFragments.length) {
+    const removed = currentClassFragments.splice(index, 1)[0];
+    renderClassFragments();
+    showMsg(`已删除 class 片段: ${removed}（记得保存）`, "#dc2626");
+  }
+}
+
+// 转义 HTML
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 // 加载
 chrome.storage.sync.get([
   "deepseekApiKey",
@@ -86,7 +146,8 @@ chrome.storage.sync.get([
   "model",
   "temperature",
   "enableMarkdown",
-  "autoExplain"
+  "autoExplain",
+  "customClassFragments"
 ], (cfg) => {
   els.apiKey.value = cfg.deepseekApiKey || "";
   els.systemPrompt.value = cfg.systemPrompt || "";
@@ -95,6 +156,12 @@ chrome.storage.sync.get([
   els.temperature.value = (cfg.temperature !== undefined ? cfg.temperature : 0.4);
   els.enableMarkdown.checked = cfg.enableMarkdown !== false;
   els.autoExplain.checked = cfg.autoExplain === true; // 默认 false
+  
+  // 加载自定义 class 片段
+  currentClassFragments = cfg.customClassFragments && cfg.customClassFragments.length > 0 
+    ? [...cfg.customClassFragments] 
+    : [...DEFAULT_CLASS_FRAGMENTS];
+  renderClassFragments();
 });
 
 // 保存
@@ -106,7 +173,8 @@ els.saveBtn.addEventListener("click", () => {
     model: els.model.value.trim() || "deepseek-chat",
     temperature: parseFloat(els.temperature.value) || 0.4,
     enableMarkdown: els.enableMarkdown.checked,
-    autoExplain: els.autoExplain.checked
+    autoExplain: els.autoExplain.checked,
+    customClassFragments: [...currentClassFragments]
   };
   chrome.storage.sync.set(data, () => showMsg("已保存", "green"));
 });
@@ -137,3 +205,17 @@ function showMsg(text, color) {
     if (els.msg.textContent === text) els.msg.textContent = "";
   }, 4000);
 }
+
+// 添加 class 片段事件监听
+els.addFragmentBtn.addEventListener("click", addClassFragment);
+
+// 回车快捷添加
+els.newClassFragment.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    addClassFragment();
+  }
+});
+
+// 将函数暴露到全局作用域，供 HTML 中的 onclick 使用
+window.removeClassFragment = removeClassFragment;

@@ -64,6 +64,28 @@
       border-radius:6px; margin-top:10px; font-size:13px;
     }
     .vars-box code { background:#e2e8f0; padding:2px 4px; border-radius:4px; }
+    .class-fragments-container {
+      border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; background: #fff;
+      min-height: 40px; max-height: 200px; overflow-y: auto;
+    }
+    .class-fragment-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 8px; margin: 2px 0; background: #f1f5f9; border-radius: 4px;
+      border: 1px solid #e2e8f0;
+    }
+    .class-fragment-item code {
+      background: #e2e8f0; padding: 2px 6px; border-radius: 3px; 
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    }
+    .class-fragment-item button {
+      background: #ef4444; color: white; border: none; border-radius: 3px;
+      padding: 2px 6px; font-size: 11px; cursor: pointer; margin-left: 8px;
+    }
+    .class-fragment-item button:hover { background: #dc2626; }
+    .class-fragments-empty {
+      text-align: center; color: #64748b; font-size: 13px; padding: 12px;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -127,6 +149,22 @@
       <button class="outline preset-btn" data-preset="grammarFocus">语法聚焦</button>
       <button class="outline preset-btn" data-preset="translationQuiz">翻译测验</button>
     </div>
+  </div>
+
+  <h2>自定义节点class片段设置</h2>
+  <p class="small">设置用于识别 Duolingo 正确答案节点的 CSS class 片段。可以添加多个片段，系统会匹配包含任一片段的节点。</p>
+  
+  <div id="classFragments" class="class-fragments-container">
+    <!-- 动态生成的 class 片段列表 -->
+  </div>
+  
+  <div class="inline-field" style="margin-top: 12px;">
+    <input id="newClassFragment" type="text" placeholder="输入新的 class 片段，如：_2jz5U" style="flex: 1; margin-top: 0;" />
+    <button id="addFragmentBtn" class="outline">添加</button>
+  </div>
+  
+  <div class="small" style="margin-top: 8px; color: #475569;">
+    <strong>提示：</strong>默认使用 <code class="inline">_2jz5U</code>。如果 Duolingo 更新了页面结构，可以通过浏览器开发者工具查找正确答案节点的 class 名称，然后添加相应的片段。
   </div>
 
   <div style="margin-top:24px;">
