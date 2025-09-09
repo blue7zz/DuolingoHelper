@@ -7,6 +7,12 @@ const els = {
   temperature: document.getElementById("temperature"),
   enableMarkdown: document.getElementById("enableMarkdown"),
   autoExplain: document.getElementById("autoExplain"),
+  enableTTS: document.getElementById("enableTTS"),
+  ttsRate: document.getElementById("ttsRate"),
+  ttsPitch: document.getElementById("ttsPitch"),
+  ttsVolume: document.getElementById("ttsVolume"),
+  ttsPreferredVoice: document.getElementById("ttsPreferredVoice"),
+  testTTSBtn: document.getElementById("testTTSBtn"),
   saveBtn: document.getElementById("saveBtn"),
   restoreBtn: document.getElementById("restoreBtn"),
   msg: document.getElementById("msg"),
@@ -84,6 +90,103 @@ const PRESETS = {
 5. 延伸练习（变换时态或否定）`
   }
 };
+
+// TTS related functions
+function loadTTSVoices() {
+  if (!('speechSynthesis' in window)) {
+    els.ttsPreferredVoice.innerHTML = '<option value="">语音播放不支持</option>';
+    return;
+  }
+
+  const voices = speechSynthesis.getVoices();
+  if (voices.length === 0) {
+    els.ttsPreferredVoice.innerHTML = '<option value="">正在加载语音...</option>';
+    return;
+  }
+
+  els.ttsPreferredVoice.innerHTML = '<option value="">自动选择</option>';
+  
+  // Group voices by language
+  const voicesByLang = {};
+  voices.forEach(voice => {
+    const lang = voice.lang.split('-')[0];
+    if (!voicesByLang[lang]) voicesByLang[lang] = [];
+    voicesByLang[lang].push(voice);
+  });
+
+  // Add voices organized by language
+  Object.keys(voicesByLang).sort().forEach(lang => {
+    const langName = {
+      'en': 'English',
+      'zh': '中文',
+      'es': 'Español',
+      'fr': 'Français',
+      'de': 'Deutsch',
+      'ja': '日本語',
+      'ko': '한국어',
+      'it': 'Italiano',
+      'pt': 'Português',
+      'ru': 'Русский'
+    }[lang] || lang.toUpperCase();
+
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = langName;
+    
+    voicesByLang[lang].forEach(voice => {
+      const option = document.createElement('option');
+      option.value = voice.name;
+      option.textContent = `${voice.name} (${voice.lang})`;
+      optgroup.appendChild(option);
+    });
+    
+    els.ttsPreferredVoice.appendChild(optgroup);
+  });
+}
+
+function testTTS() {
+  if (!('speechSynthesis' in window)) {
+    showMsg("此浏览器不支持语音播放", "#dc2626");
+    return;
+  }
+
+  speechSynthesis.cancel();
+
+  const testText = "Hello, this is a test of the text-to-speech functionality. 你好，这是语音播放功能的测试。";
+  const utterance = new SpeechSynthesisUtterance(testText);
+  
+  utterance.rate = parseFloat(els.ttsRate.value) || 1.0;
+  utterance.pitch = parseFloat(els.ttsPitch.value) || 1.0;
+  utterance.volume = parseFloat(els.ttsVolume.value) || 0.8;
+
+  if (els.ttsPreferredVoice.value) {
+    const voices = speechSynthesis.getVoices();
+    const selectedVoice = voices.find(v => v.name === els.ttsPreferredVoice.value);
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+      utterance.lang = selectedVoice.lang;
+    }
+  }
+
+  utterance.onstart = () => {
+    els.testTTSBtn.disabled = true;
+    els.testTTSBtn.textContent = "播放中...";
+  };
+
+  utterance.onend = () => {
+    els.testTTSBtn.disabled = false;
+    els.testTTSBtn.textContent = "测试语音";
+    showMsg("语音测试完成", "#16a34a");
+  };
+
+  utterance.onerror = (event) => {
+    els.testTTSBtn.disabled = false;
+    els.testTTSBtn.textContent = "测试语音";
+    showMsg("语音播放出错: " + event.error, "#dc2626");
+  };
+
+  speechSynthesis.speak(utterance);
+  showMsg("开始播放测试语音...", "#2563eb");
+}
 
 // 默认 class 片段
 const DEFAULT_CLASS_FRAGMENTS = ["_2jz5U"];
@@ -240,7 +343,8 @@ chrome.storage.sync.get([
   "enableMarkdown",
   "autoExplain",
   "customClassFragments",
-  "recordedProblems"
+  "recordedProblems",
+  "ttsConfig"
 ], (cfg) => {
   els.apiKey.value = cfg.deepseekApiKey || "";
   els.systemPrompt.value = cfg.systemPrompt || "";
@@ -249,6 +353,13 @@ chrome.storage.sync.get([
   els.temperature.value = (cfg.temperature !== undefined ? cfg.temperature : 0.4);
   els.enableMarkdown.checked = cfg.enableMarkdown !== false;
   els.autoExplain.checked = cfg.autoExplain === true; // 默认 false
+  
+  // Load TTS configuration
+  const ttsConfig = cfg.ttsConfig || {};
+  els.enableTTS.checked = ttsConfig.enabled !== false; // 默认 true
+  els.ttsRate.value = ttsConfig.rate || 1.0;
+  els.ttsPitch.value = ttsConfig.pitch || 1.0;
+  els.ttsVolume.value = ttsConfig.volume || 0.8;
   
   // 加载自定义 class 片段
   currentClassFragments = cfg.customClassFragments && cfg.customClassFragments.length > 0 
@@ -259,6 +370,14 @@ chrome.storage.sync.get([
   // 加载记录的问题
   currentRecordedProblems = cfg.recordedProblems || [];
   renderRecordedProblems();
+  
+  // Load TTS voices after a short delay to ensure they are available
+  setTimeout(() => {
+    loadTTSVoices();
+    if (ttsConfig.preferredVoice) {
+      els.ttsPreferredVoice.value = ttsConfig.preferredVoice;
+    }
+  }, 100);
 });
 
 // 保存
@@ -271,7 +390,14 @@ els.saveBtn.addEventListener("click", () => {
     temperature: parseFloat(els.temperature.value) || 0.4,
     enableMarkdown: els.enableMarkdown.checked,
     autoExplain: els.autoExplain.checked,
-    customClassFragments: [...currentClassFragments]
+    customClassFragments: [...currentClassFragments],
+    ttsConfig: {
+      enabled: els.enableTTS.checked,
+      rate: parseFloat(els.ttsRate.value) || 1.0,
+      pitch: parseFloat(els.ttsPitch.value) || 1.0,
+      volume: parseFloat(els.ttsVolume.value) || 0.8,
+      preferredVoice: els.ttsPreferredVoice.value || null
+    }
   };
   chrome.storage.sync.set(data, () => showMsg("已保存", "green"));
 });
@@ -321,3 +447,11 @@ window.deleteRecordedProblem = deleteRecordedProblem;
 // 记录问题相关事件监听
 els.exportProblemsBtn.addEventListener("click", exportRecordedProblems);
 els.clearProblemsBtn.addEventListener("click", clearAllRecordedProblems);
+
+// TTS 相关事件监听
+els.testTTSBtn.addEventListener("click", testTTS);
+
+// 语音加载事件监听
+if ('speechSynthesis' in window) {
+  speechSynthesis.addEventListener('voiceschanged', loadTTSVoices);
+}

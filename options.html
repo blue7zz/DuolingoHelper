@@ -155,6 +155,50 @@
       <input type="checkbox" id="enableMarkdown" />
       <span class="slider"></span>
     </label>
+
+    <label style="font-weight:600;">启用语音播放</label>
+    <label class="switch">
+      <input type="checkbox" id="enableTTS" />
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <h2>语音播放设置</h2>
+  <div class="row">
+    <div>
+      <label class="block">
+        语音速度 (0.1-2.0)
+        <input id="ttsRate" type="number" step="0.1" min="0.1" max="2.0" placeholder="1.0" />
+      </label>
+    </div>
+    <div>
+      <label class="block">
+        音调 (0.1-2.0)
+        <input id="ttsPitch" type="number" step="0.1" min="0.1" max="2.0" placeholder="1.0" />
+      </label>
+    </div>
+  </div>
+  
+  <div class="row">
+    <div>
+      <label class="block">
+        音量 (0.1-1.0)
+        <input id="ttsVolume" type="number" step="0.1" min="0.1" max="1.0" placeholder="0.8" />
+      </label>
+    </div>
+    <div>
+      <label class="block">
+        首选语音
+        <select id="ttsPreferredVoice">
+          <option value="">自动选择</option>
+        </select>
+      </label>
+    </div>
+  </div>
+  
+  <div style="margin-top:12px;">
+    <button id="testTTSBtn" class="outline">测试语音</button>
+    <span class="small" style="margin-left:12px; color: #475569;">点击测试当前语音设置</span>
   </div>
 
   <h2>System Prompt</h2>

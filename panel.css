@@ -178,6 +178,10 @@
   font-weight:600;
   margin-bottom:6px;
   word-break:break-word;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .ddp-candidate button.ddp-explain-btn,
@@ -196,6 +200,34 @@
 .ddp-candidate button.ddp-regenerate-btn:hover,
 .ddp-candidate button.ddp-record-btn:hover {
   background:#1d4ed8;
+}
+
+.ddp-candidate button.ddp-play-btn {
+  background: #059669;
+  border: none;
+  color: #fff;
+  padding: 4px 8px;
+  font-size: 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  min-width: 32px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.ddp-candidate button.ddp-play-btn:hover {
+  background: #047857;
+  transform: scale(1.05);
+}
+
+.ddp-candidate button.ddp-play-btn:disabled {
+  background: #6b7280;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .ddp-candidate button.ddp-record-btn {
