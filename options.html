@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>Deepseek 设置</title>
+  <style>
+    body {
+      font-family: system-ui, Arial, sans-serif;
+      margin: 18px auto 60px;
+      background: #f8fafc;
+      color: #0f172a;
+      max-width: 900px;
+      padding: 0 16px;
+    }
+    h1 { font-size: 22px; margin-bottom: 6px; }
+    h2 { margin-top: 34px; font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; }
+    label.block { display: block; margin-top: 18px; font-weight: 600; }
+    textarea, input[type=text], input[type=password], input[type=number], select {
+      width: 100%; box-sizing: border-box;
+      padding: 8px 10px; font-size: 14px;
+      border: 1px solid #cbd5e1; border-radius: 6px;
+      background: #fff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    textarea { resize: vertical; min-height: 120px; line-height: 1.4; }
+    .row { display: flex; gap: 16px; }
+    .row > div { flex: 1; }
+    button {
+      cursor: pointer;
+      border: none;
+      background: #2563eb;
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-right: 8px;
+    }
+    button.secondary { background: #64748b; }
+    button.outline {
+      background: #fff; color: #1e293b; border: 1px solid #94a3b8;
+    }
+    button.outline:hover { background: #f1f5f9; }
+    .msg { margin-top: 12px; font-size: 14px; }
+    .preset-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .preset-container button { font-size: 12px; padding: 6px 10px; }
+    .small { font-size: 12px; color: #475569; }
+    code.inline { background:#e2e8f0; padding:2px 4px; border-radius:4px; }
+    footer { margin-top: 40px; font-size: 12px; color: #64748b; text-align: center; }
+    .inline-field { display:flex; align-items:center; gap:12px; margin-top:14px; flex-wrap:wrap;}
+    .switch { position: relative; display: inline-block; width: 46px; height: 24px; }
+    .switch input { opacity:0; width:0; height:0; }
+    .slider {
+      position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0;
+      background:#cbd5e1; transition:.2s; border-radius:24px;
+    }
+    .slider:before {
+      position:absolute; content:""; height:20px; width:20px; left:2px; top:2px;
+      background:white; transition:.2s; border-radius:50%;
+      box-shadow:0 1px 3px rgba(0,0,0,.25);
+    }
+    input:checked + .slider { background:#2563eb; }
+    input:checked + .slider:before { transform:translateX(22px); }
+    .vars-box {
+      background:#fff; border:1px solid #cbd5e1; padding:10px 12px;
+      border-radius:6px; margin-top:10px; font-size:13px;
+    }
+    .vars-box code { background:#e2e8f0; padding:2px 4px; border-radius:4px; }
+  </style>
+</head>
+<body>
+  <h1>Deepseek Prompt 设置</h1>
+  <p>支持变量：<code class="inline">{{sentence}}</code> <code class="inline">{{languageDetected}}</code> <code class="inline">{{sentenceLength}}</code> <code class="inline">{{now}}</code></p>
+
+  <h2>API 基础</h2>
+  <label class="block">
+    API Key
+    <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+  </label>
+
+  <div class="row">
+    <div>
+      <label class="block">
+        模型 (model)
+        <input id="model" type="text" placeholder="deepseek-chat" />
+      </label>
+    </div>
+    <div>
+      <label class="block">
+        温度 (temperature 0~1)
+        <input id="temperature" type="number" step="0.1" min="0" max="1" placeholder="0.4" />
+      </label>
+    </div>
+  </div>
+
+  <div class="inline-field">
+    <label style="font-weight:600;">自动解析(检测到句子立即请求)</label>
+    <label class="switch">
+      <input type="checkbox" id="autoExplain" />
+      <span class="slider"></span>
+    </label>
+
+    <label style="font-weight:600;">启用 Markdown 渲染</label>
+    <label class="switch">
+      <input type="checkbox" id="enableMarkdown" />
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <h2>System Prompt</h2>
+  <textarea id="systemPrompt" placeholder="系统角色设定 (留空=默认)"></textarea>
+
+  <h2>User Prompt 模板</h2>
+  <textarea id="userPrompt" placeholder="用户模板，支持 {{sentence}} 等变量"></textarea>
+  <div class="vars-box">
+    <strong>可用变量：</strong><br/>
+    <code>{{sentence}}</code> 正确答案句子<br/>
+    <code>{{languageDetected}}</code> 检测语言<br/>
+    <code>{{sentenceLength}}</code> 字符长度<br/>
+    <code>{{now}}</code> 当前时间 (ISO)<br/>
+  </div>
+
+  <div style="margin-top:12px;">
+    <div style="font-weight:600;">快速预设：</div>
+    <div class="preset-container">
+      <button class="outline preset-btn" data-preset="explain">标准解释</button>
+      <button class="outline preset-btn" data-preset="compare">对比同义</button>
+      <button class="outline preset-btn" data-preset="mnemonic">记忆法</button>
+      <button class="outline preset-btn" data-preset="grammarFocus">语法聚焦</button>
+      <button class="outline preset-btn" data-preset="translationQuiz">翻译测验</button>
+    </div>
+  </div>
+
+  <div style="margin-top:24px;">
+    <button id="saveBtn">保存设置</button>
+    <button id="restoreBtn" class="secondary">恢复默认 Prompt</button>
+  </div>
+  <div class="msg" id="msg"></div>
+
+  <footer>
+    修改后刷新 Duolingo 页面生效 · 请勿泄露 API Key
+  </footer>
+
+  <script src="options.js"></script>
+</body>
+</html>

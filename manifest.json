@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Duolingo Answer Explainer (Deepseek)",
+  "version": "0.1.0",
+  "description": "答错题后抓取正确答案发送到 Deepseek 并显示解析。",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://www.duolingo.com/*",
+    "https://api.deepseek.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.duolingo.com/*"],
+      "js": ["content.js"],
+      "css": ["panel.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_page": "options.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["panel.css"],
+      "matches": ["https://www.duolingo.com/*"]
+    }
+  ]
+}
