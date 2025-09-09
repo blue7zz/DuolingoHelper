@@ -221,6 +221,64 @@
   word-break:break-word;
 }
 
+.ddp-followup {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #374151;
+}
+
+.ddp-followup-input-container {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ddp-followup-input {
+  flex: 1;
+  background: #1f2937;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+}
+
+.ddp-followup-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb55;
+}
+
+.ddp-followup-btn {
+  background: #059669;
+  border: none;
+  color: #fff;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ddp-followup-btn:hover {
+  background: #047857;
+}
+
+.ddp-followup-status {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+.ddp-followup-content {
+  padding: 8px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .ddp-explanation-block h1,
 .ddp-explanation-block h2,
 .ddp-explanation-block h3 {

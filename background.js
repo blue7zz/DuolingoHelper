@@ -1,6 +1,53 @@
 // 背景 Service Worker：读取用户自定义 Prompt，调用 Deepseek API
 // 如果之前已经有逻辑，请整体替换为本版本
 
+async function callDeepseekFollowup(config, originalSentence, originalExplanation, followupQuestion) {
+  const { apiKey, model, temperature } = config;
+
+  if (!apiKey) {
+    throw new Error("尚未设置 Deepseek API Key。");
+  }
+
+  const systemPrompt = `你是一个专业的语言学习助手。用户之前询问了一个句子的解析，现在有追加问题。请基于之前的解析内容，针对用户的追问给出精准、简洁的回答。`;
+  
+  const userPrompt = `原始句子：${originalSentence}
+
+之前的解析内容：
+${originalExplanation}
+
+用户追问：${followupQuestion}
+
+请针对这个追问给出回答：`;
+
+  const body = {
+    model: model || "deepseek-chat",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ],
+    temperature: typeof temperature === "number" ? temperature : 0.4
+  };
+
+  const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    const txt = await resp.text();
+    throw new Error("Deepseek API 调用失败: " + resp.status + " - " + txt);
+  }
+
+  const data = await resp.json();
+  let content = data?.choices?.[0]?.message?.content || "(无返回)";
+
+  return { content };
+}
+
 async function callDeepseek(config, sentence) {
   const {
     apiKey,
@@ -132,6 +179,35 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           usedSystem: res.usedSystem,
           usedUser: res.usedUser,
           contextVars: res.contextVars
+        });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    });
+    return true; // 异步
+  }
+  
+  if (msg.type === "DEEPSEEK_FOLLOWUP") {
+    const { originalSentence, originalExplanation, followupQuestion } = msg;
+    chrome.storage.sync.get([
+      "deepseekApiKey",
+      "systemPrompt", 
+      "userPrompt",
+      "model",
+      "temperature",
+      "enableMarkdown"
+    ], async (cfg) => {
+      try {
+        const res = await callDeepseekFollowup({
+          apiKey: cfg.deepseekApiKey,
+          model: cfg.model,
+          temperature: (cfg.temperature !== undefined ? Number(cfg.temperature) : undefined),
+          enableMarkdown: cfg.enableMarkdown
+        }, originalSentence, originalExplanation, followupQuestion);
+
+        sendResponse({
+          ok: true,
+          explanation: res.content
         });
       } catch (e) {
         sendResponse({ ok: false, error: e.message });

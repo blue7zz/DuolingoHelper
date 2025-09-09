@@ -114,7 +114,7 @@ function addCandidate(sentence, opts = {}) {
   if (existing) {
     // 已存在：高亮 & 如果未解析且请求方式允许，触发
     highlight(existing);
-    if (autoStart && existing.querySelector(".ddp-explanation-block")?.style.display !== "block") {
+    if (autoStart && existing.querySelector(".ddp-explanation-content")?.innerHTML && existing.querySelector(".ddp-explanation-block")?.style.display !== "none") {
       const btn = existing.querySelector(".ddp-explain-btn");
       if (btn && !btn.disabled) btn.click();
     }
@@ -133,20 +133,53 @@ function addCandidate(sentence, opts = {}) {
       <button class="ddp-regenerate-btn" style="display:none;">重新生成</button>
     </div>
     <div class="ddp-status"></div>
-    <div class="ddp-explanation-block" style="display:none;"></div>
+    <div class="ddp-explanation-block" style="display:none;">
+      <div class="ddp-explanation-content"></div>
+      <div class="ddp-followup" style="display:none;">
+        <div class="ddp-followup-input-container">
+          <input class="ddp-followup-input" type="text" placeholder="对这个解析有其他问题？输入追问..." />
+          <button class="ddp-followup-btn">追问</button>
+        </div>
+        <div class="ddp-followup-status"></div>
+        <div class="ddp-followup-content"></div>
+      </div>
+    </div>
   `;
 
   const explainBtn = container.querySelector(".ddp-explain-btn");
   const regenBtn = container.querySelector(".ddp-regenerate-btn");
   const statusEl = container.querySelector(".ddp-status");
   const blockEl = container.querySelector(".ddp-explanation-block");
+  const contentEl = container.querySelector(".ddp-explanation-content");
+  const followupEl = container.querySelector(".ddp-followup");
+  const followupInput = container.querySelector(".ddp-followup-input");
+  const followupBtn = container.querySelector(".ddp-followup-btn");
+  const followupStatus = container.querySelector(".ddp-followup-status");
+  const followupContent = container.querySelector(".ddp-followup-content");
 
   explainBtn.addEventListener("click", () => {
-    requestExplanation(sentence, { container, statusEl, blockEl, explainBtn, regenBtn, first: true });
+    requestExplanation(sentence, { container, statusEl, blockEl, contentEl, followupEl, explainBtn, regenBtn, first: true });
   });
 
   regenBtn.addEventListener("click", () => {
-    requestExplanation(sentence, { container, statusEl, blockEl, explainBtn, regenBtn, first: false, regenerate: true });
+    requestExplanation(sentence, { container, statusEl, blockEl, contentEl, followupEl, explainBtn, regenBtn, first: false, regenerate: true });
+  });
+
+  // Follow-up question event handlers
+  followupBtn.addEventListener("click", () => {
+    const question = followupInput.value.trim();
+    if (question.length < 2) {
+      followupInput.focus();
+      return;
+    }
+    requestFollowup(sentence, question, { followupStatus, followupContent, followupInput, contentEl });
+  });
+
+  followupInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      followupBtn.click();
+    }
   });
 
   list.prepend(container);
@@ -154,16 +187,52 @@ function addCandidate(sentence, opts = {}) {
   highlight(container);
 
   if (autoStart) {
-    requestExplanation(sentence, { container, statusEl, blockEl, explainBtn, regenBtn, first: true });
+    requestExplanation(sentence, { container, statusEl, blockEl, contentEl, followupEl, explainBtn, regenBtn, first: true });
   }
 
   return container;
 }
 
+function requestFollowup(originalSentence, followupQuestion, ctx) {
+  const { followupStatus, followupContent, followupInput, contentEl } = ctx;
+  
+  followupStatus.innerHTML = `<span class="spinner"></span> 正在追问...`;
+  followupContent.style.display = "none";
+  
+  // Get the original explanation content
+  const originalExplanation = contentEl.textContent || contentEl.innerText || "";
+  
+  chrome.runtime.sendMessage(
+    { 
+      type: "DEEPSEEK_FOLLOWUP", 
+      originalSentence,
+      originalExplanation,
+      followupQuestion 
+    },
+    (resp) => {
+      if (!resp) {
+        followupStatus.innerHTML = `<span class="ddp-error">无响应（权限或后台异常）</span>`;
+        return;
+      }
+      if (resp.ok) {
+        followupStatus.textContent = "追问完成";
+        const html = enableMarkdown ? simpleMarkdown(resp.explanation)
+          : `<pre style="white-space:pre-wrap;font-family:inherit;">${escapeHtml(resp.explanation)}</pre>`;
+        followupContent.innerHTML = html;
+        followupContent.style.display = "block";
+        followupInput.value = ""; // Clear the input
+      } else {
+        followupStatus.innerHTML = `<span class="ddp-error">${escapeHtml(resp.error || "追问失败")}</span>`;
+      }
+    }
+  );
+}
+
 function requestExplanation(sentence, ctx) {
-  const { statusEl, blockEl, explainBtn, regenBtn } = ctx;
+  const { statusEl, blockEl, contentEl, followupEl, explainBtn, regenBtn } = ctx;
   statusEl.innerHTML = `<span class="spinner"></span> 正在请求...`;
   blockEl.style.display = "none";
+  followupEl.style.display = "none";
   explainBtn.disabled = true;
   regenBtn.style.display = "none";
   regenBtn.disabled = true;
@@ -182,8 +251,9 @@ function requestExplanation(sentence, ctx) {
         statusEl.textContent = "完成";
         const html = enableMarkdown ? simpleMarkdown(resp.explanation)
           : `<pre style="white-space:pre-wrap;font-family:inherit;">${escapeHtml(resp.explanation)}</pre>`;
-        blockEl.innerHTML = html;
+        contentEl.innerHTML = html;
         blockEl.style.display = "block";
+        followupEl.style.display = "block";
         regenBtn.style.display = "inline-block";
         regenBtn.disabled = false;
       } else {
@@ -200,10 +270,9 @@ function handleManualSentence(sentence) {
   seenSentences.add(sentence);
   const candidate = addCandidate(sentence, { autoStart: true, manual: true });
   if (existed) {
-    // 如果已经有解析，则不自动请求（上面 addCandidate 会自动请求 only when autoStart true; we decide logic)
-    // 这里逻辑：若已有解析就不重复请求；如果没有解析（状态区为空），按钮会被自动点击
-    const blockEl = candidate.querySelector(".ddp-explanation-block");
-    if (blockEl && blockEl.style.display === "block") {
+    // 如果已经有解析，则不自动请求
+    const blockEl = candidate.querySelector(".ddp-explanation-content");
+    if (blockEl && blockEl.innerHTML.trim()) {
       // 已有解析，不再请求
     }
   }
