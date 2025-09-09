@@ -181,7 +181,8 @@
 }
 
 .ddp-candidate button.ddp-explain-btn,
-.ddp-candidate button.ddp-regenerate-btn {
+.ddp-candidate button.ddp-regenerate-btn,
+.ddp-candidate button.ddp-record-btn {
   background:#2563eb;
   border:none;
   color:#fff;
@@ -192,8 +193,27 @@
   margin-right:6px;
 }
 .ddp-candidate button.ddp-explain-btn:hover,
-.ddp-candidate button.ddp-regenerate-btn:hover {
+.ddp-candidate button.ddp-regenerate-btn:hover,
+.ddp-candidate button.ddp-record-btn:hover {
   background:#1d4ed8;
+}
+
+.ddp-candidate button.ddp-record-btn {
+  background:#16a34a;
+}
+.ddp-candidate button.ddp-record-btn:hover {
+  background:#15803d;
+}
+.ddp-candidate button.ddp-record-btn.recorded {
+  background:#dc2626;
+}
+.ddp-candidate button.ddp-record-btn.recorded:hover {
+  background:#b91c1c;
+}
+
+.ddp-candidate.recorded-item {
+  border-left: 3px solid #16a34a;
+  background: #1f2937dd;
 }
 
 .ddp-candidate .ddp-status {

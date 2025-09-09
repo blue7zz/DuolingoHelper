@@ -131,6 +131,7 @@ function addCandidate(sentence, opts = {}) {
     <div class="ddp-actions">
       <button class="ddp-explain-btn">解析</button>
       <button class="ddp-regenerate-btn" style="display:none;">重新生成</button>
+      <button class="ddp-record-btn" title="记录此问题">记录</button>
     </div>
     <div class="ddp-status"></div>
     <div class="ddp-explanation-block" style="display:none;">
@@ -148,6 +149,7 @@ function addCandidate(sentence, opts = {}) {
 
   const explainBtn = container.querySelector(".ddp-explain-btn");
   const regenBtn = container.querySelector(".ddp-regenerate-btn");
+  const recordBtn = container.querySelector(".ddp-record-btn");
   const statusEl = container.querySelector(".ddp-status");
   const blockEl = container.querySelector(".ddp-explanation-block");
   const contentEl = container.querySelector(".ddp-explanation-content");
@@ -163,6 +165,10 @@ function addCandidate(sentence, opts = {}) {
 
   regenBtn.addEventListener("click", () => {
     requestExplanation(sentence, { container, statusEl, blockEl, contentEl, followupEl, explainBtn, regenBtn, first: false, regenerate: true });
+  });
+
+  recordBtn.addEventListener("click", () => {
+    toggleRecordProblem(sentence, contentEl, recordBtn, container);
   });
 
   // Follow-up question event handlers
@@ -185,6 +191,9 @@ function addCandidate(sentence, opts = {}) {
   list.prepend(container);
   ensurePanel().style.display = "flex";
   highlight(container);
+
+  // 检查并更新记录状态
+  checkAndUpdateRecordStatus(sentence, recordBtn, container);
 
   if (autoStart) {
     requestExplanation(sentence, { container, statusEl, blockEl, contentEl, followupEl, explainBtn, regenBtn, first: true });
@@ -280,6 +289,98 @@ function handleManualSentence(sentence) {
   const inputEl = document.getElementById("ddp-manual-input");
   if (inputEl) inputEl.value = "";
   inputEl?.focus();
+}
+
+// 记录问题相关功能
+async function toggleRecordProblem(sentence, contentEl, recordBtn, container) {
+  const explanation = contentEl.textContent || contentEl.innerText || "";
+  
+  if (!explanation.trim()) {
+    recordBtn.title = "请先获取解析再记录";
+    return;
+  }
+
+  try {
+    const isRecorded = await isQuestionRecorded(sentence);
+    
+    if (isRecorded) {
+      await unrecordQuestion(sentence);
+      updateRecordButtonState(recordBtn, container, false);
+    } else {
+      await recordQuestion(sentence, explanation);
+      updateRecordButtonState(recordBtn, container, true);
+    }
+  } catch (error) {
+    console.error("记录操作失败:", error);
+  }
+}
+
+async function recordQuestion(sentence, explanation) {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(["recordedProblems"], (result) => {
+      const problems = result.recordedProblems || [];
+      const problemId = hash(sentence);
+      
+      // 检查是否已存在
+      const existing = problems.find(p => p.id === problemId);
+      if (existing) {
+        resolve();
+        return;
+      }
+      
+      problems.push({
+        id: problemId,
+        sentence,
+        explanation,
+        timestamp: new Date().toISOString(),
+        hash: problemId
+      });
+      
+      chrome.storage.sync.set({ recordedProblems: problems }, resolve);
+    });
+  });
+}
+
+async function unrecordQuestion(sentence) {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(["recordedProblems"], (result) => {
+      const problems = result.recordedProblems || [];
+      const problemId = hash(sentence);
+      const filtered = problems.filter(p => p.id !== problemId);
+      
+      chrome.storage.sync.set({ recordedProblems: filtered }, resolve);
+    });
+  });
+}
+
+async function isQuestionRecorded(sentence) {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(["recordedProblems"], (result) => {
+      const problems = result.recordedProblems || [];
+      const problemId = hash(sentence);
+      const exists = problems.some(p => p.id === problemId);
+      resolve(exists);
+    });
+  });
+}
+
+function updateRecordButtonState(recordBtn, container, isRecorded) {
+  if (isRecorded) {
+    recordBtn.textContent = "已记录";
+    recordBtn.title = "点击取消记录";
+    recordBtn.classList.add("recorded");
+    container.classList.add("recorded-item");
+  } else {
+    recordBtn.textContent = "记录";
+    recordBtn.title = "记录此问题";
+    recordBtn.classList.remove("recorded");
+    container.classList.remove("recorded-item");
+  }
+}
+
+async function checkAndUpdateRecordStatus(sentence, recordBtn, container) {
+  const isRecorded = await isQuestionRecorded(sentence);
+  updateRecordButtonState(recordBtn, container, isRecorded);
 }
 
 function initObserver() {

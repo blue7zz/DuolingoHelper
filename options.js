@@ -12,7 +12,11 @@ const els = {
   msg: document.getElementById("msg"),
   classFragments: document.getElementById("classFragments"),
   newClassFragment: document.getElementById("newClassFragment"),
-  addFragmentBtn: document.getElementById("addFragmentBtn")
+  addFragmentBtn: document.getElementById("addFragmentBtn"),
+  exportProblemsBtn: document.getElementById("exportProblemsBtn"),
+  clearProblemsBtn: document.getElementById("clearProblemsBtn"),
+  problemsCount: document.getElementById("problemsCount"),
+  recordedProblemsList: document.getElementById("recordedProblemsList")
 };
 
 const DEFAULT_SYSTEM_PROMPT = `你是一个专业的语言学习助手。请遵守：
@@ -138,6 +142,94 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// 记录问题相关功能
+let currentRecordedProblems = [];
+
+// 渲染记录的问题列表
+function renderRecordedProblems() {
+  if (currentRecordedProblems.length === 0) {
+    els.recordedProblemsList.innerHTML = '<div class="recorded-problems-empty">暂无记录的问题</div>';
+    els.problemsCount.textContent = '共 0 条记录';
+    return;
+  }
+  
+  els.problemsCount.textContent = `共 ${currentRecordedProblems.length} 条记录`;
+  
+  els.recordedProblemsList.innerHTML = currentRecordedProblems.map((problem, index) => `
+    <div class="recorded-problem-item">
+      <div class="recorded-problem-sentence">${escapeHtml(problem.sentence)}</div>
+      <div class="recorded-problem-explanation">${escapeHtml(problem.explanation)}</div>
+      <div class="recorded-problem-meta">
+        <span>记录时间: ${new Date(problem.timestamp).toLocaleString('zh-CN')}</span>
+        <button class="recorded-problem-delete" onclick="deleteRecordedProblem(${index})" title="删除此记录">删除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// 加载记录的问题
+function loadRecordedProblems() {
+  chrome.storage.sync.get(["recordedProblems"], (result) => {
+    currentRecordedProblems = result.recordedProblems || [];
+    renderRecordedProblems();
+  });
+}
+
+// 删除单个记录的问题
+function deleteRecordedProblem(index) {
+  if (index >= 0 && index < currentRecordedProblems.length) {
+    const deleted = currentRecordedProblems.splice(index, 1)[0];
+    chrome.storage.sync.set({ recordedProblems: [...currentRecordedProblems] }, () => {
+      renderRecordedProblems();
+      showMsg(`已删除记录: ${deleted.sentence.substring(0, 20)}...`, "#dc2626");
+    });
+  }
+}
+
+// 导出记录的问题
+function exportRecordedProblems() {
+  if (currentRecordedProblems.length === 0) {
+    showMsg("没有记录可以导出", "#dc2626");
+    return;
+  }
+  
+  const exportData = {
+    exportTime: new Date().toISOString(),
+    totalCount: currentRecordedProblems.length,
+    problems: currentRecordedProblems.map(p => ({
+      sentence: p.sentence,
+      explanation: p.explanation,
+      recordedTime: p.timestamp
+    }))
+  };
+  
+  const dataStr = JSON.stringify(exportData, null, 2);
+  const dataBlob = new Blob([dataStr], { type: 'application/json' });
+  
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(dataBlob);
+  link.download = `duolingo-recorded-problems-${new Date().toISOString().split('T')[0]}.json`;
+  link.click();
+  
+  showMsg(`已导出 ${currentRecordedProblems.length} 条记录`, "#16a34a");
+}
+
+// 清空所有记录
+function clearAllRecordedProblems() {
+  if (currentRecordedProblems.length === 0) {
+    showMsg("没有记录可以清空", "#dc2626");
+    return;
+  }
+  
+  if (confirm(`确定要清空所有 ${currentRecordedProblems.length} 条记录吗？此操作不可恢复。`)) {
+    chrome.storage.sync.set({ recordedProblems: [] }, () => {
+      currentRecordedProblems = [];
+      renderRecordedProblems();
+      showMsg("已清空所有记录", "#dc2626");
+    });
+  }
+}
+
 // 加载
 chrome.storage.sync.get([
   "deepseekApiKey",
@@ -147,7 +239,8 @@ chrome.storage.sync.get([
   "temperature",
   "enableMarkdown",
   "autoExplain",
-  "customClassFragments"
+  "customClassFragments",
+  "recordedProblems"
 ], (cfg) => {
   els.apiKey.value = cfg.deepseekApiKey || "";
   els.systemPrompt.value = cfg.systemPrompt || "";
@@ -162,6 +255,10 @@ chrome.storage.sync.get([
     ? [...cfg.customClassFragments] 
     : [...DEFAULT_CLASS_FRAGMENTS];
   renderClassFragments();
+  
+  // 加载记录的问题
+  currentRecordedProblems = cfg.recordedProblems || [];
+  renderRecordedProblems();
 });
 
 // 保存
@@ -219,3 +316,8 @@ els.newClassFragment.addEventListener("keydown", (e) => {
 
 // 将函数暴露到全局作用域，供 HTML 中的 onclick 使用
 window.removeClassFragment = removeClassFragment;
+window.deleteRecordedProblem = deleteRecordedProblem;
+
+// 记录问题相关事件监听
+els.exportProblemsBtn.addEventListener("click", exportRecordedProblems);
+els.clearProblemsBtn.addEventListener("click", clearAllRecordedProblems);
