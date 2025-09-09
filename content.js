@@ -1,5 +1,5 @@
 // content script：在面板顶部新增手动输入框，可自定义句子解析
-const TARGET_CLASS_PART = "_2jz5U"; // Duolingo 正确答案节点 class 片段（需要时更新）
+let TARGET_CLASS_FRAGMENTS = ["_2jz5U"]; // 可配置的 class 片段列表，默认值
 const PANEL_ID = "duolingo-deepseek-panel";
 
 let observing = false;
@@ -8,9 +8,15 @@ let autoExplain = false;
 const seenSentences = new Set(); // 已出现的句子（包含手动与自动）
 const highlightTimeouts = new Map();
 
-chrome.storage.sync.get(["enableMarkdown", "autoExplain"], cfg => {
+// 加载配置
+chrome.storage.sync.get(["enableMarkdown", "autoExplain", "customClassFragments"], cfg => {
   if (cfg.enableMarkdown !== undefined) enableMarkdown = cfg.enableMarkdown;
   autoExplain = cfg.autoExplain === true;
+  
+  // 加载自定义 class 片段
+  if (cfg.customClassFragments && cfg.customClassFragments.length > 0) {
+    TARGET_CLASS_FRAGMENTS = [...cfg.customClassFragments];
+  }
 });
 
 function ensurePanel() {
@@ -215,7 +221,10 @@ function initObserver() {
       for (const node of m.addedNodes) {
         if (!(node instanceof HTMLElement)) continue;
         checkNode(node);
-        node.querySelectorAll?.(`div[class*="${TARGET_CLASS_PART}"]`)?.forEach(checkNode);
+        // 检查任意包含目标 class 片段的节点
+        TARGET_CLASS_FRAGMENTS.forEach(fragment => {
+          node.querySelectorAll?.(`div[class*="${fragment}"]`)?.forEach(checkNode);
+        });
       }
     }
   });
@@ -227,7 +236,14 @@ function initObserver() {
 
 function checkNode(node) {
   if (!node.className || typeof node.className !== "string") return;
-  if (!node.className.includes(TARGET_CLASS_PART)) return;
+  
+  // 检查节点的 class 是否包含任一目标片段
+  const hasTargetClass = TARGET_CLASS_FRAGMENTS.some(fragment => 
+    node.className.includes(fragment)
+  );
+  
+  if (!hasTargetClass) return;
+  
   const text = node.textContent?.trim();
   if (text && !seenSentences.has(text) && isLikelyValidSentence(text)) {
     seenSentences.add(text);
