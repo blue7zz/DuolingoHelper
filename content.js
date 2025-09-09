@@ -238,7 +238,9 @@ function requestFollowup(originalSentence, followupQuestion, ctx) {
 }
 
 function requestExplanation(sentence, ctx) {
-  const { statusEl, blockEl, contentEl, followupEl, explainBtn, regenBtn } = ctx;
+  const { container, statusEl, blockEl, contentEl, followupEl, explainBtn, regenBtn } = ctx;
+  const recordBtn = container?.querySelector(".ddp-record-btn");
+  
   statusEl.innerHTML = `<span class="spinner"></span> 正在请求...`;
   blockEl.style.display = "none";
   followupEl.style.display = "none";
@@ -265,6 +267,11 @@ function requestExplanation(sentence, ctx) {
         followupEl.style.display = "block";
         regenBtn.style.display = "inline-block";
         regenBtn.disabled = false;
+        
+        // Update record button state if it exists
+        if (recordBtn && container) {
+          checkAndUpdateRecordStatus(sentence, recordBtn, container);
+        }
       } else {
         statusEl.innerHTML = `<span class="ddp-error">${escapeHtml(resp.error || "未知错误")}</span>`;
         regenBtn.style.display = "inline-block";
@@ -297,6 +304,13 @@ async function toggleRecordProblem(sentence, contentEl, recordBtn, container) {
   
   if (!explanation.trim()) {
     recordBtn.title = "请先获取解析再记录";
+    // Add visual feedback
+    recordBtn.style.background = "#f59e0b";
+    recordBtn.textContent = "先解析";
+    setTimeout(() => {
+      recordBtn.style.background = "";
+      recordBtn.textContent = "记录";
+    }, 2000);
     return;
   }
 
