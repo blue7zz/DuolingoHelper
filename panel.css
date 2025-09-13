@@ -372,6 +372,61 @@
   margin-bottom: 4px;
 }
 
+/* Wrong answer section styles */
+.ddp-wrong-answer-section {
+  margin-top: 8px;
+  padding: 8px;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 4px;
+}
+
+.ddp-wrong-answer-input-container {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.ddp-wrong-answer-input {
+  flex: 1;
+  background: #1f2937;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+}
+
+.ddp-wrong-answer-input:focus {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 1px #dc262655;
+}
+
+.ddp-save-wrong-btn {
+  background: #dc2626;
+  border: none;
+  color: #fff;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ddp-save-wrong-btn:hover {
+  background: #b91c1c;
+}
+
+.ddp-wrong-answer-status {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* Phonetic symbol styles */
 .ddp-phonetic-symbol {
   display: inline-flex;
