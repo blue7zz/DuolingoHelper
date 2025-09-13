@@ -282,7 +282,7 @@ function addCandidate(sentence, opts = {}) {
           <button class="ddp-followup-btn">追问</button>
         </div>
         <div class="ddp-followup-status"></div>
-        <div class="ddp-followup-content"></div>
+        <div class="ddp-followup-history"></div>
       </div>
     </div>
   `;
@@ -298,7 +298,7 @@ function addCandidate(sentence, opts = {}) {
   const followupInput = container.querySelector(".ddp-followup-input");
   const followupBtn = container.querySelector(".ddp-followup-btn");
   const followupStatus = container.querySelector(".ddp-followup-status");
-  const followupContent = container.querySelector(".ddp-followup-content");
+  const followupHistory = container.querySelector(".ddp-followup-history");
 
   explainBtn.addEventListener("click", () => {
     requestExplanation(sentence, { container, statusEl, blockEl, contentEl, followupEl, explainBtn, regenBtn, first: true });
@@ -323,7 +323,7 @@ function addCandidate(sentence, opts = {}) {
       followupInput.focus();
       return;
     }
-    requestFollowup(sentence, question, { followupStatus, followupContent, followupInput, contentEl });
+    requestFollowup(sentence, question, { followupStatus, followupHistory, followupInput, contentEl });
   });
 
   followupInput.addEventListener("keydown", (e) => {
@@ -348,20 +348,31 @@ function addCandidate(sentence, opts = {}) {
 }
 
 function requestFollowup(originalSentence, followupQuestion, ctx) {
-  const { followupStatus, followupContent, followupInput, contentEl } = ctx;
+  const { followupStatus, followupHistory, followupInput, contentEl } = ctx;
   
   followupStatus.innerHTML = `<span class="spinner"></span> 正在追问...`;
-  followupContent.style.display = "none";
   
   // Get the original explanation content
   const originalExplanation = contentEl.textContent || contentEl.innerText || "";
+  
+  // Get all previous followup history for context
+  const previousFollowups = [];
+  const existingItems = followupHistory.querySelectorAll('.ddp-followup-item');
+  existingItems.forEach(item => {
+    const question = item.querySelector('.ddp-followup-question')?.textContent || '';
+    const answer = item.querySelector('.ddp-followup-answer')?.textContent || item.querySelector('.ddp-followup-answer')?.innerText || '';
+    if (question && answer) {
+      previousFollowups.push({ question, answer });
+    }
+  });
   
   chrome.runtime.sendMessage(
     { 
       type: "DEEPSEEK_FOLLOWUP", 
       originalSentence,
       originalExplanation,
-      followupQuestion 
+      followupQuestion,
+      previousFollowups
     },
     (resp) => {
       if (!resp) {
@@ -370,11 +381,35 @@ function requestFollowup(originalSentence, followupQuestion, ctx) {
       }
       if (resp.ok) {
         followupStatus.textContent = "追问完成";
+        
+        // Create a new followup item
+        const followupItem = document.createElement('div');
+        followupItem.className = 'ddp-followup-item';
+        
+        const questionDiv = document.createElement('div');
+        questionDiv.className = 'ddp-followup-question';
+        questionDiv.textContent = `Q: ${followupQuestion}`;
+        
+        const answerDiv = document.createElement('div');
+        answerDiv.className = 'ddp-followup-answer';
         const html = enableMarkdown ? simpleMarkdown(resp.explanation)
           : `<pre style="white-space:pre-wrap;font-family:inherit;">${escapeHtml(resp.explanation)}</pre>`;
-        followupContent.innerHTML = html;
-        followupContent.style.display = "block";
+        answerDiv.innerHTML = `<strong>A:</strong> ${html}`;
+        
+        // Enhance answer content with phonetic symbol play buttons
+        enhanceContentWithPhoneticButtons(answerDiv);
+        
+        followupItem.appendChild(questionDiv);
+        followupItem.appendChild(answerDiv);
+        
+        // Add to history
+        followupHistory.appendChild(followupItem);
+        followupHistory.style.display = "block";
+        
         followupInput.value = ""; // Clear the input
+        
+        // Scroll the new item into view
+        followupItem.scrollIntoView({ behavior: "smooth", block: "nearest" });
       } else {
         followupStatus.innerHTML = `<span class="ddp-error">${escapeHtml(resp.error || "追问失败")}</span>`;
       }
@@ -408,6 +443,10 @@ function requestExplanation(sentence, ctx) {
         const html = enableMarkdown ? simpleMarkdown(resp.explanation)
           : `<pre style="white-space:pre-wrap;font-family:inherit;">${escapeHtml(resp.explanation)}</pre>`;
         contentEl.innerHTML = html;
+        
+        // Enhance content with phonetic symbol play buttons
+        enhanceContentWithPhoneticButtons(contentEl);
+        
         blockEl.style.display = "block";
         followupEl.style.display = "block";
         regenBtn.style.display = "inline-block";
@@ -632,6 +671,324 @@ function highlight(el) {
   highlightTimeouts.set(el, t);
   // 滚动到可视区域
   el.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// Phonetic symbol detection and enhancement
+function detectPhoneticSymbols(htmlContent) {
+  // IPA symbols and common phonetic patterns
+  const phoneticRegex = /[\[\uFF3B\/]([ɪɛæɑɔʊʌəɚɝθðʃʒŋtʃdʒjwɹlmnpbtkgfvszh\s'ˈˌːˑ\u02C8\u02CC\u02D0\u02D1]+)[\]\uFF3D\/]/g;
+  
+  const matches = [];
+  let match;
+  
+  // Create a temporary div to parse HTML safely
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = htmlContent;
+  
+  // Get text content to search for phonetic symbols
+  const textContent = tempDiv.textContent || tempDiv.innerText;
+  
+  while ((match = phoneticRegex.exec(textContent)) !== null) {
+    // Validate that this contains actual IPA symbols
+    const phoneticText = match[1];
+    if (containsIpaSymbols(phoneticText)) {
+      matches.push({
+        fullMatch: match[0],
+        phoneticText: phoneticText,
+        index: match.index
+      });
+    }
+  }
+  
+  return matches;
+}
+
+function containsIpaSymbols(text) {
+  // Check if text contains actual IPA symbols (not just regular letters)
+  const ipaSymbols = /[ɪɛæɑɔʊʌəɚɝθðʃʒŋtʃdʒɹˈˌːˑ\u02C8\u02CC\u02D0\u02D1]/;
+  return ipaSymbols.test(text);
+}
+
+function cleanPhoneticText(phoneticText) {
+  // Remove surrounding brackets first
+  let cleaned = phoneticText
+    .replace(/[\[\]\uFF3B\uFF3D\/]/g, '') // Remove brackets
+    .trim();
+    
+  // Convert IPA symbols to more TTS-friendly approximations
+  cleaned = convertIpaToTtsFriendly(cleaned);
+  
+  return cleaned;
+}
+
+// Convert IPA symbols to TTS-friendly approximations
+function convertIpaToTtsFriendly(ipaText) {
+  // Create a mapping from IPA symbols to TTS-friendly approximations
+  const ipaToTtsMap = {
+    // Vowels - 元音
+    'ɪ': 'i',      // near-close near-front unrounded vowel (bit)
+    'ɛ': 'e',      // open-mid front unrounded vowel (bet)
+    'æ': 'a',      // near-open front unrounded vowel (bat)
+    'ɑ': 'a',      // open back unrounded vowel (father)
+    'ɔ': 'o',      // open-mid back rounded vowel (caught)
+    'ʊ': 'u',      // near-close near-back rounded vowel (book)
+    'ʌ': 'u',      // open-mid back unrounded vowel (but)
+    'ə': 'uh',     // mid central vowel (schwa - about)
+    'ɚ': 'er',     // mid central vowel with r-coloring (butter)
+    'ɝ': 'er',     // mid central vowel with r-coloring (bird)
+    
+    // Consonants - 辅音
+    'θ': 'th',     // voiceless dental fricative (think)
+    'ð': 'th',     // voiced dental fricative (this) 
+    'ʃ': 'sh',     // voiceless postalveolar fricative (ship)
+    'ʒ': 'zh',     // voiced postalveolar fricative (measure)
+    'ŋ': 'ng',     // velar nasal (sing)
+    'tʃ': 'ch',    // voiceless postalveolar affricate (chip)
+    'dʒ': 'j',     // voiced postalveolar affricate (jump)
+    'ɹ': 'r',      // alveolar approximant (red)
+    
+    // Diphthongs - 双元音
+    'eɪ': 'ay',    // face
+    'aɪ': 'eye',   // price
+    'ɔɪ': 'oy',    // choice
+    'aʊ': 'ow',    // mouth
+    'oʊ': 'oh',    // goat
+    'ɪə': 'eer',   // near
+    'ɛə': 'air',   // square
+    'ʊə': 'oor',   // cure
+    
+    // Stress and length markers - remove these
+    'ˈ': '',       // primary stress
+    'ˌ': '',       // secondary stress  
+    'ː': '',       // length marker
+    'ˑ': '',       // half-length marker
+    '\u02C8': '',  // primary stress (unicode)
+    '\u02CC': '',  // secondary stress (unicode)
+    '\u02D0': '',  // length marker (unicode)
+    '\u02D1': ''   // half-length marker (unicode)
+  };
+  
+  let result = ipaText;
+  
+  // Apply mappings in order (longer patterns first to avoid partial matches)
+  const sortedKeys = Object.keys(ipaToTtsMap).sort((a, b) => b.length - a.length);
+  
+  for (const ipaSymbol of sortedKeys) {
+    const replacement = ipaToTtsMap[ipaSymbol];
+    const regex = new RegExp(escapeRegExp(ipaSymbol), 'g');
+    result = result.replace(regex, replacement);
+  }
+  
+  // Clean up any remaining special characters and normalize spaces
+  result = result
+    .replace(/[^a-zA-Z\s]/g, '') // Remove any remaining non-alphabetic chars except spaces
+    .replace(/\s+/g, ' ')        // Normalize multiple spaces
+    .trim();
+    
+  return result;
+}
+
+// Helper function to escape special regex characters
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function playPhoneticSymbol(phoneticText, playBtn) {
+  if (!ttsConfig.enabled) {
+    return;
+  }
+
+  // Check if speech synthesis is supported
+  if (!('speechSynthesis' in window)) {
+    console.warn('Text-to-speech not supported in this browser');
+    return;
+  }
+
+  // Stop any ongoing speech
+  speechSynthesis.cancel();
+
+  // Update button state
+  playBtn.disabled = true;
+  playBtn.textContent = "🔊";
+  playBtn.title = "播放中...";
+
+  // Clean and convert the phonetic text for better TTS
+  const cleanedText = cleanPhoneticText(phoneticText);
+  
+  // If the cleaned text is empty or very short, fall back to a more literal approach
+  const textToSpeak = cleanedText.length < 2 ? phoneticText.replace(/[\[\]\/]/g, '') : cleanedText;
+  
+  console.log(`音标播放: 原始="${phoneticText}" -> 清理后="${textToSpeak}"`);
+  
+  const utterance = new SpeechSynthesisUtterance(textToSpeak);
+  
+  // Configure utterance with optimal settings for phonetic pronunciation
+  utterance.rate = ttsConfig.rate * 0.7; // Even slower for better clarity
+  utterance.pitch = ttsConfig.pitch * 0.9; // Slightly lower pitch for clarity
+  utterance.volume = ttsConfig.volume;
+
+  // Try to select the best English voice for phonetic symbols
+  const voice = selectBestVoiceForPhonetics();
+  if (voice) {
+    utterance.voice = voice;
+    utterance.lang = voice.lang;
+  } else {
+    // Fallback to generic English
+    utterance.lang = 'en-US';
+  }
+
+  // Event handlers
+  utterance.onstart = () => {
+    playBtn.textContent = "⏸️";
+    playBtn.title = "播放中 (点击停止)";
+    playBtn.onclick = () => {
+      speechSynthesis.cancel();
+    };
+  };
+
+  utterance.onend = () => {
+    resetPhoneticPlayButton(playBtn, phoneticText);
+  };
+
+  utterance.onerror = (event) => {
+    console.warn('Phonetic text-to-speech error:', event.error);
+    resetPhoneticPlayButton(playBtn, phoneticText);
+  };
+
+  // Start speaking
+  speechSynthesis.speak(utterance);
+}
+
+// Select the best voice specifically for phonetic pronunciation
+function selectBestVoiceForPhonetics() {
+  const voices = speechSynthesis.getVoices();
+  if (voices.length === 0) return null;
+
+  // Preferred voice characteristics for phonetic pronunciation
+  const preferences = [
+    // High-quality English voices (often better for phonetics)
+    { pattern: /microsoft.*david/i, lang: 'en-US' },
+    { pattern: /microsoft.*zira/i, lang: 'en-US' },
+    { pattern: /google.*english/i, lang: 'en-US' },
+    { pattern: /enhanced/i, lang: 'en-US' },
+    { pattern: /premium/i, lang: 'en-US' },
+    { pattern: /neural/i, lang: 'en-US' },
+    // Fallback to any US English voice
+    { pattern: /./i, lang: 'en-US' },
+    { pattern: /./i, lang: 'en-GB' },
+    { pattern: /./i, lang: 'en' }
+  ];
+
+  // First check if user has a preferred voice that works
+  if (ttsConfig.preferredVoice) {
+    const preferredVoice = voices.find(v => v.name === ttsConfig.preferredVoice && v.lang.startsWith('en'));
+    if (preferredVoice) return preferredVoice;
+  }
+
+  // Try each preference in order
+  for (const pref of preferences) {
+    const voice = voices.find(v => 
+      v.lang.startsWith(pref.lang) && pref.pattern.test(v.name)
+    );
+    if (voice) return voice;
+  }
+
+  // Final fallback
+  return voices.find(v => v.lang.startsWith('en')) || voices[0];
+}
+
+function resetPhoneticPlayButton(playBtn, phoneticText) {
+  playBtn.disabled = false;
+  playBtn.textContent = "🔊";
+  playBtn.title = "播放音标";
+  playBtn.onclick = () => {
+    playPhoneticSymbol(phoneticText, playBtn);
+  };
+}
+
+function enhanceContentWithPhoneticButtons(contentElement) {
+  if (!contentElement) return;
+  
+  // Get the HTML content
+  const htmlContent = contentElement.innerHTML;
+  
+  // Detect phonetic symbols
+  const phoneticMatches = detectPhoneticSymbols(htmlContent);
+  
+  if (phoneticMatches.length === 0) return; // No phonetic symbols found
+  
+  // Create a document fragment to work with
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = htmlContent;
+  
+  // Process each text node to find and replace phonetic symbols
+  const walker = document.createTreeWalker(
+    tempDiv,
+    NodeFilter.SHOW_TEXT,
+    null,
+    false
+  );
+  
+  const textNodes = [];
+  let node;
+  while (node = walker.nextNode()) {
+    textNodes.push(node);
+  }
+  
+  // Process text nodes in reverse order to maintain indices
+  for (let i = textNodes.length - 1; i >= 0; i--) {
+    const textNode = textNodes[i];
+    const text = textNode.textContent;
+    
+    // Find phonetic symbols in this text node
+    const phoneticRegex = /[\[\uFF3B\/]([ɪɛæɑɔʊʌəɚɝθðʃʒŋtʃdʒjwɹlmnpbtkgfvszh\s'ˈˌːˑ\u02C8\u02CC\u02D0\u02D1]+)[\]\uFF3D\/]/g;
+    let match;
+    const replacements = [];
+    
+    while ((match = phoneticRegex.exec(text)) !== null) {
+      if (containsIpaSymbols(match[1])) {
+        replacements.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          phoneticText: match[1],
+          fullMatch: match[0]
+        });
+      }
+    }
+    
+    if (replacements.length > 0) {
+      // Create replacement HTML
+      let newHTML = text;
+      
+      // Process replacements in reverse order to maintain indices
+      for (let j = replacements.length - 1; j >= 0; j--) {
+        const replacement = replacements[j];
+        const phoneticSpan = `<span class="ddp-phonetic-symbol">
+          <span class="ddp-phonetic-text">${escapeHtml(replacement.fullMatch)}</span>
+          <button class="ddp-phonetic-play-btn" title="播放音标" data-phonetic="${escapeHtml(replacement.phoneticText)}">🔊</button>
+        </span>`;
+        
+        newHTML = newHTML.slice(0, replacement.start) + phoneticSpan + newHTML.slice(replacement.end);
+      }
+      
+      // Replace the text node with new HTML
+      const wrapper = document.createElement('span');
+      wrapper.innerHTML = newHTML;
+      textNode.parentNode.replaceChild(wrapper, textNode);
+    }
+  }
+  
+  // Update the content element
+  contentElement.innerHTML = tempDiv.innerHTML;
+  
+  // Bind click events to phonetic play buttons
+  const phoneticPlayBtns = contentElement.querySelectorAll('.ddp-phonetic-play-btn');
+  phoneticPlayBtns.forEach(btn => {
+    const phoneticText = btn.getAttribute('data-phonetic');
+    btn.onclick = () => {
+      playPhoneticSymbol(phoneticText, btn);
+    };
+  });
 }
 
 // Initialize TTS voices

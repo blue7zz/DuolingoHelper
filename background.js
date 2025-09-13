@@ -1,21 +1,34 @@
 // 背景 Service Worker：读取用户自定义 Prompt，调用 Deepseek API
 // 如果之前已经有逻辑，请整体替换为本版本
 
-async function callDeepseekFollowup(config, originalSentence, originalExplanation, followupQuestion) {
+async function callDeepseekFollowup(config, originalSentence, originalExplanation, followupQuestion, previousFollowups = []) {
   const { apiKey, model, temperature } = config;
 
   if (!apiKey) {
     throw new Error("尚未设置 Deepseek API Key。");
   }
 
-  const systemPrompt = `你是一个专业的语言学习助手。用户之前询问了一个句子的解析，现在有追加问题。请基于之前的解析内容，针对用户的追问给出精准、简洁的回答。`;
+  const systemPrompt = `你是一个专业的语言学习助手。用户之前询问了一个句子的解析，现在有追加问题。请基于之前的解析内容和历史追问记录，针对用户的追问给出精准、简洁的回答。`;
   
-  const userPrompt = `原始句子：${originalSentence}
+  let conversationHistory = `原始句子：${originalSentence}
 
 之前的解析内容：
-${originalExplanation}
+${originalExplanation}`;
+  
+  if (previousFollowups.length > 0) {
+    conversationHistory += `
 
-用户追问：${followupQuestion}
+历史追问记录：`;
+    previousFollowups.forEach((followup, index) => {
+      conversationHistory += `
+${index + 1}. Q: ${followup.question}
+   A: ${followup.answer}`;
+    });
+  }
+  
+  const userPrompt = `${conversationHistory}
+
+用户新的追问：${followupQuestion}
 
 请针对这个追问给出回答：`;
 
@@ -188,7 +201,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   
   if (msg.type === "DEEPSEEK_FOLLOWUP") {
-    const { originalSentence, originalExplanation, followupQuestion } = msg;
+    const { originalSentence, originalExplanation, followupQuestion, previousFollowups } = msg;
     chrome.storage.sync.get([
       "deepseekApiKey",
       "systemPrompt", 
@@ -203,7 +216,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           model: cfg.model,
           temperature: (cfg.temperature !== undefined ? Number(cfg.temperature) : undefined),
           enableMarkdown: cfg.enableMarkdown
-        }, originalSentence, originalExplanation, followupQuestion);
+        }, originalSentence, originalExplanation, followupQuestion, previousFollowups);
 
         sendResponse({
           ok: true,
