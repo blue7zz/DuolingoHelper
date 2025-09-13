@@ -116,6 +116,55 @@
       text-align: center; color: #64748b; font-size: 13px; padding: 24px;
       font-style: italic;
     }
+    .wrong-answers-container {
+      border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;
+      max-height: 400px; overflow-y: auto; margin-top: 12px;
+    }
+    .wrong-answer-item {
+      padding: 12px; border-bottom: 1px solid #e2e8f0; position: relative;
+    }
+    .wrong-answer-item:last-child {
+      border-bottom: none;
+    }
+    .wrong-answer-correct {
+      font-weight: 600; margin-bottom: 4px; color: #16a34a;
+    }
+    .wrong-answer-wrong {
+      background: #fef2f2; padding: 6px 8px; border-radius: 4px; 
+      border-left: 3px solid #ef4444; margin-bottom: 6px; color: #991b1b;
+    }
+    .wrong-answer-meta {
+      font-size: 11px; color: #64748b; margin-top: 6px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .wrong-answer-delete {
+      background: #ef4444; color: white; border: none; border-radius: 3px;
+      padding: 4px 8px; font-size: 11px; cursor: pointer;
+    }
+    .wrong-answer-delete:hover { background: #dc2626; }
+    .wrong-answers-empty {
+      text-align: center; color: #64748b; font-size: 13px; padding: 24px;
+      font-style: italic;
+    }
+    .analysis-content {
+      border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;
+      padding: 16px; margin-top: 12px; max-height: 500px; overflow-y: auto;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+    }
+    .analysis-content h1, .analysis-content h2, .analysis-content h3 {
+      color: #1e293b; margin-top: 1.5em; margin-bottom: 0.5em;
+    }
+    .analysis-content h1 { font-size: 24px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+    .analysis-content h2 { font-size: 20px; }
+    .analysis-content h3 { font-size: 16px; }
+    .analysis-content ul, .analysis-content ol { margin: 0.5em 0; padding-left: 1.5em; }
+    .analysis-content li { margin: 0.25em 0; }
+    .analysis-content code { background: #f1f5f9; padding: 2px 4px; border-radius: 3px; }
+    .analysis-content blockquote {
+      border-left: 4px solid #e2e8f0; margin: 1em 0; padding: 0.5em 1em;
+      background: #f8fafc; font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -252,6 +301,29 @@
   
   <div id="recordedProblemsList" class="recorded-problems-container">
     <!-- 动态生成的记录问题列表 -->
+  </div>
+
+  <h2>错误答案分析</h2>
+  <p class="small">收集的错误答案，可以发送给 Deepseek 进行分析总结。</p>
+  
+  <div class="inline-field">
+    <button id="analyzeWrongAnswersBtn" class="outline">分析错误答案</button>
+    <button id="exportWrongAnswersBtn" class="outline">导出错误答案</button>
+    <button id="clearWrongAnswersBtn" class="secondary">清空错误答案</button>
+    <span id="wrongAnswersCount" class="small" style="margin-left: 12px;">加载中...</span>
+  </div>
+  
+  <div id="wrongAnswersList" class="wrong-answers-container">
+    <!-- 动态生成的错误答案列表 -->
+  </div>
+  
+  <div id="analysisResultSection" style="display: none; margin-top: 20px;">
+    <h3>错误分析报告</h3>
+    <div class="inline-field">
+      <button id="downloadAnalysisBtn" class="outline">下载报告</button>
+      <button id="closeAnalysisBtn" class="secondary">关闭报告</button>
+    </div>
+    <div id="analysisContent" class="analysis-content"></div>
   </div>
 
   <div style="margin-top:24px;">

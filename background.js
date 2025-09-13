@@ -61,6 +61,142 @@ ${index + 1}. Q: ${followup.question}
   return { content };
 }
 
+async function callDeepseekAnalyzeWrongAnswers(config, wrongAnswers) {
+  const { apiKey, model, temperature } = config;
+
+  if (!apiKey) {
+    throw new Error("尚未设置 Deepseek API Key。");
+  }
+
+  if (!wrongAnswers || wrongAnswers.length === 0) {
+    throw new Error("没有错误答案可以分析。");
+  }
+
+  const systemPrompt = `你是一个专业的语言学习分析师。你将分析用户在语言学习中的错误答案，找出错误模式，并提供改进建议。请使用Markdown格式输出结果。`;
+  
+  const wrongAnswerList = wrongAnswers.map((item, index) => 
+    `${index + 1}. 正确答案: "${item.correctSentence}"
+   用户的错误答案: "${item.wrongAnswer}"
+   记录时间: ${item.timestamp}`
+  ).join('\n\n');
+
+  const userPrompt = `请分析以下${wrongAnswers.length}个错误答案，找出学习者的薄弱环节和错误模式：
+
+${wrongAnswerList}
+
+请按以下结构进行分析：
+
+# 错误答案分析报告
+
+## 📊 数据概览
+- 错误答案总数：${wrongAnswers.length}
+- 分析时间：${new Date().toLocaleString('zh-CN')}
+
+## 🔍 错误模式分析
+请分析并总结主要的错误类型（如语法错误、词汇错误、拼写错误等）
+
+## 📋 具体错误分类
+请将错误答案按类型分组，并给出每类错误的具体例子
+
+## 💡 改进建议
+针对发现的错误模式，提供具体的学习建议和练习方法
+
+## 🎯 重点关注领域
+列出需要重点加强的语言学习领域
+
+## 📚 推荐学习资源
+根据错误分析，推荐相应的学习资源或练习方法
+
+---
+*本报告由AI分析生成，建议结合实际情况进行学习规划*`;
+
+  const body = {
+    model: model || "deepseek-chat",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ],
+    temperature: typeof temperature === "number" ? temperature : 0.3
+  };
+
+  const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    const txt = await resp.text();
+    throw new Error("Deepseek API 调用失败: " + resp.status + " - " + txt);
+  }
+
+  const data = await resp.json();
+  let content = data?.choices?.[0]?.message?.content || "(无返回)";
+
+  return { content };
+}
+  const { apiKey, model, temperature } = config;
+
+  if (!apiKey) {
+    throw new Error("尚未设置 Deepseek API Key。");
+  }
+
+  const systemPrompt = `你是一个专业的语言学习助手。用户之前询问了一个句子的解析，现在有追加问题。请基于之前的解析内容和历史追问记录，针对用户的追问给出精准、简洁的回答。`;
+  
+  let conversationHistory = `原始句子：${originalSentence}
+
+之前的解析内容：
+${originalExplanation}`;
+  
+  if (previousFollowups.length > 0) {
+    conversationHistory += `
+
+历史追问记录：`;
+    previousFollowups.forEach((followup, index) => {
+      conversationHistory += `
+${index + 1}. Q: ${followup.question}
+   A: ${followup.answer}`;
+    });
+  }
+  
+  const userPrompt = `${conversationHistory}
+
+用户新的追问：${followupQuestion}
+
+请针对这个追问给出回答：`;
+
+  const body = {
+    model: model || "deepseek-chat",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ],
+    temperature: typeof temperature === "number" ? temperature : 0.4
+  };
+
+  const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    const txt = await resp.text();
+    throw new Error("Deepseek API 调用失败: " + resp.status + " - " + txt);
+  }
+
+  const data = await resp.json();
+  let content = data?.choices?.[0]?.message?.content || "(无返回)";
+
+  return { content };
+}
+
 async function callDeepseek(config, sentence) {
   const {
     apiKey,
@@ -221,6 +357,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({
           ok: true,
           explanation: res.content
+        });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    });
+    return true; // 异步
+  }
+  
+  if (msg.type === "DEEPSEEK_ANALYZE_WRONG_ANSWERS") {
+    const { wrongAnswers } = msg;
+    chrome.storage.sync.get([
+      "deepseekApiKey",
+      "model",
+      "temperature"
+    ], async (cfg) => {
+      try {
+        const res = await callDeepseekAnalyzeWrongAnswers({
+          apiKey: cfg.deepseekApiKey,
+          model: cfg.model,
+          temperature: (cfg.temperature !== undefined ? Number(cfg.temperature) : undefined)
+        }, wrongAnswers);
+
+        sendResponse({
+          ok: true,
+          analysis: res.content
         });
       } catch (e) {
         sendResponse({ ok: false, error: e.message });

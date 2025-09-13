@@ -22,7 +22,16 @@ const els = {
   exportProblemsBtn: document.getElementById("exportProblemsBtn"),
   clearProblemsBtn: document.getElementById("clearProblemsBtn"),
   problemsCount: document.getElementById("problemsCount"),
-  recordedProblemsList: document.getElementById("recordedProblemsList")
+  recordedProblemsList: document.getElementById("recordedProblemsList"),
+  analyzeWrongAnswersBtn: document.getElementById("analyzeWrongAnswersBtn"),
+  exportWrongAnswersBtn: document.getElementById("exportWrongAnswersBtn"),
+  clearWrongAnswersBtn: document.getElementById("clearWrongAnswersBtn"),
+  wrongAnswersCount: document.getElementById("wrongAnswersCount"),
+  wrongAnswersList: document.getElementById("wrongAnswersList"),
+  analysisResultSection: document.getElementById("analysisResultSection"),
+  downloadAnalysisBtn: document.getElementById("downloadAnalysisBtn"),
+  closeAnalysisBtn: document.getElementById("closeAnalysisBtn"),
+  analysisContent: document.getElementById("analysisContent")
 };
 
 const DEFAULT_SYSTEM_PROMPT = `你是一个专业的语言学习助手。请遵守：
@@ -247,6 +256,8 @@ function escapeHtml(str) {
 
 // 记录问题相关功能
 let currentRecordedProblems = [];
+let currentWrongAnswers = [];
+let currentAnalysisReport = "";
 
 // 渲染记录的问题列表
 function renderRecordedProblems() {
@@ -333,6 +344,172 @@ function clearAllRecordedProblems() {
   }
 }
 
+// 错误答案相关功能
+// 渲染错误答案列表
+function renderWrongAnswers() {
+  if (currentWrongAnswers.length === 0) {
+    els.wrongAnswersList.innerHTML = '<div class="wrong-answers-empty">暂无错误答案记录</div>';
+    els.wrongAnswersCount.textContent = '共 0 条记录';
+    return;
+  }
+  
+  els.wrongAnswersCount.textContent = `共 ${currentWrongAnswers.length} 条记录`;
+  
+  els.wrongAnswersList.innerHTML = currentWrongAnswers.map((wrongAnswer, index) => `
+    <div class="wrong-answer-item">
+      <div class="wrong-answer-correct">正确答案: ${escapeHtml(wrongAnswer.correctSentence)}</div>
+      <div class="wrong-answer-wrong">你的答案: ${escapeHtml(wrongAnswer.wrongAnswer)}</div>
+      <div class="wrong-answer-meta">
+        <span>记录时间: ${new Date(wrongAnswer.timestamp).toLocaleString('zh-CN')}</span>
+        <button class="wrong-answer-delete" onclick="deleteWrongAnswer(${index})" title="删除此记录">删除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// 加载错误答案
+function loadWrongAnswers() {
+  chrome.storage.sync.get(["wrongAnswers"], (result) => {
+    currentWrongAnswers = result.wrongAnswers || [];
+    renderWrongAnswers();
+  });
+}
+
+// 删除单个错误答案
+function deleteWrongAnswer(index) {
+  if (index >= 0 && index < currentWrongAnswers.length) {
+    const deleted = currentWrongAnswers.splice(index, 1)[0];
+    chrome.storage.sync.set({ wrongAnswers: [...currentWrongAnswers] }, () => {
+      renderWrongAnswers();
+      showMsg(`已删除错误答案记录: ${deleted.wrongAnswer.substring(0, 20)}...`, "#dc2626");
+    });
+  }
+}
+
+// 导出错误答案
+function exportWrongAnswers() {
+  if (currentWrongAnswers.length === 0) {
+    showMsg("没有错误答案可以导出", "#dc2626");
+    return;
+  }
+  
+  const exportData = {
+    exportTime: new Date().toISOString(),
+    totalCount: currentWrongAnswers.length,
+    wrongAnswers: currentWrongAnswers.map(w => ({
+      correctSentence: w.correctSentence,
+      wrongAnswer: w.wrongAnswer,
+      recordedTime: w.timestamp
+    }))
+  };
+  
+  const dataStr = JSON.stringify(exportData, null, 2);
+  const dataBlob = new Blob([dataStr], { type: 'application/json' });
+  
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(dataBlob);
+  link.download = `duolingo-wrong-answers-${new Date().toISOString().split('T')[0]}.json`;
+  link.click();
+  
+  showMsg(`已导出 ${currentWrongAnswers.length} 条错误答案`, "#16a34a");
+}
+
+// 清空所有错误答案
+function clearAllWrongAnswers() {
+  if (currentWrongAnswers.length === 0) {
+    showMsg("没有错误答案可以清空", "#dc2626");
+    return;
+  }
+  
+  if (confirm(`确定要清空所有 ${currentWrongAnswers.length} 条错误答案吗？此操作不可恢复。`)) {
+    chrome.storage.sync.set({ wrongAnswers: [] }, () => {
+      currentWrongAnswers = [];
+      renderWrongAnswers();
+      showMsg("已清空所有错误答案", "#dc2626");
+    });
+  }
+}
+
+// 分析错误答案
+function analyzeWrongAnswers() {
+  if (currentWrongAnswers.length === 0) {
+    showMsg("没有错误答案可以分析", "#dc2626");
+    return;
+  }
+  
+  els.analyzeWrongAnswersBtn.disabled = true;
+  els.analyzeWrongAnswersBtn.textContent = "分析中...";
+  showMsg("正在分析错误答案，请稍候...", "#2563eb");
+  
+  chrome.runtime.sendMessage(
+    { 
+      type: "DEEPSEEK_ANALYZE_WRONG_ANSWERS", 
+      wrongAnswers: currentWrongAnswers 
+    },
+    (resp) => {
+      els.analyzeWrongAnswersBtn.disabled = false;
+      els.analyzeWrongAnswersBtn.textContent = "分析错误答案";
+      
+      if (!resp) {
+        showMsg("无响应（权限或后台异常）", "#dc2626");
+        return;
+      }
+      
+      if (resp.ok) {
+        currentAnalysisReport = resp.analysis;
+        displayAnalysisReport(resp.analysis);
+        showMsg("分析完成", "#16a34a");
+      } else {
+        showMsg(`分析失败: ${resp.error || "未知错误"}`, "#dc2626");
+      }
+    }
+  );
+}
+
+// 显示分析报告
+function displayAnalysisReport(analysisContent) {
+  els.analysisContent.innerHTML = markdownToHtml(analysisContent);
+  els.analysisResultSection.style.display = "block";
+  els.analysisResultSection.scrollIntoView({ behavior: "smooth" });
+}
+
+// 简单的 Markdown 到 HTML 转换
+function markdownToHtml(markdown) {
+  return markdown
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+    .replace(/\*(.*)\*/gim, '<em>$1</em>')
+    .replace(/`([^`]*)`/gim, '<code>$1</code>')
+    .replace(/^- (.*)$/gim, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/gims, '<ul>$1</ul>')
+    .replace(/^\d+\. (.*)$/gim, '<li>$1</li>')
+    .replace(/\n/gim, '<br>');
+}
+
+// 下载分析报告
+function downloadAnalysisReport() {
+  if (!currentAnalysisReport) {
+    showMsg("没有可下载的分析报告", "#dc2626");
+    return;
+  }
+  
+  const reportBlob = new Blob([currentAnalysisReport], { type: 'text/markdown; charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(reportBlob);
+  link.download = `duolingo-error-analysis-report-${new Date().toISOString().split('T')[0]}.md`;
+  link.click();
+  
+  showMsg("分析报告已下载", "#16a34a");
+}
+
+// 关闭分析报告
+function closeAnalysisReport() {
+  els.analysisResultSection.style.display = "none";
+  currentAnalysisReport = "";
+}
+
 // 加载
 chrome.storage.sync.get([
   "deepseekApiKey",
@@ -344,6 +521,7 @@ chrome.storage.sync.get([
   "autoExplain",
   "customClassFragments",
   "recordedProblems",
+  "wrongAnswers",
   "ttsConfig"
 ], (cfg) => {
   els.apiKey.value = cfg.deepseekApiKey || "";
@@ -370,6 +548,10 @@ chrome.storage.sync.get([
   // 加载记录的问题
   currentRecordedProblems = cfg.recordedProblems || [];
   renderRecordedProblems();
+  
+  // 加载错误答案
+  currentWrongAnswers = cfg.wrongAnswers || [];
+  renderWrongAnswers();
   
   // Load TTS voices after a short delay to ensure they are available
   setTimeout(() => {
@@ -443,10 +625,18 @@ els.newClassFragment.addEventListener("keydown", (e) => {
 // 将函数暴露到全局作用域，供 HTML 中的 onclick 使用
 window.removeClassFragment = removeClassFragment;
 window.deleteRecordedProblem = deleteRecordedProblem;
+window.deleteWrongAnswer = deleteWrongAnswer;
 
 // 记录问题相关事件监听
 els.exportProblemsBtn.addEventListener("click", exportRecordedProblems);
 els.clearProblemsBtn.addEventListener("click", clearAllRecordedProblems);
+
+// 错误答案相关事件监听
+els.analyzeWrongAnswersBtn.addEventListener("click", analyzeWrongAnswers);
+els.exportWrongAnswersBtn.addEventListener("click", exportWrongAnswers);
+els.clearWrongAnswersBtn.addEventListener("click", clearAllWrongAnswers);
+els.downloadAnalysisBtn.addEventListener("click", downloadAnalysisReport);
+els.closeAnalysisBtn.addEventListener("click", closeAnalysisReport);
 
 // TTS 相关事件监听
 els.testTTSBtn.addEventListener("click", testTTS);

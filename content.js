@@ -273,6 +273,13 @@ function addCandidate(sentence, opts = {}) {
       <button class="ddp-regenerate-btn" style="display:none;">重新生成</button>
       <button class="ddp-record-btn" title="记录此问题">记录</button>
     </div>
+    <div class="ddp-wrong-answer-section">
+      <div class="ddp-wrong-answer-input-container">
+        <input class="ddp-wrong-answer-input" type="text" placeholder="输入你的错误答案..." />
+        <button class="ddp-save-wrong-btn">保存错误答案</button>
+      </div>
+      <div class="ddp-wrong-answer-status"></div>
+    </div>
     <div class="ddp-status"></div>
     <div class="ddp-explanation-block" style="display:none;">
       <div class="ddp-explanation-content"></div>
@@ -299,6 +306,9 @@ function addCandidate(sentence, opts = {}) {
   const followupBtn = container.querySelector(".ddp-followup-btn");
   const followupStatus = container.querySelector(".ddp-followup-status");
   const followupHistory = container.querySelector(".ddp-followup-history");
+  const wrongAnswerInput = container.querySelector(".ddp-wrong-answer-input");
+  const saveWrongBtn = container.querySelector(".ddp-save-wrong-btn");
+  const wrongAnswerStatus = container.querySelector(".ddp-wrong-answer-status");
 
   explainBtn.addEventListener("click", () => {
     requestExplanation(sentence, { container, statusEl, blockEl, contentEl, followupEl, explainBtn, regenBtn, first: true });
@@ -330,6 +340,23 @@ function addCandidate(sentence, opts = {}) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       followupBtn.click();
+    }
+  });
+
+  // Wrong answer functionality
+  saveWrongBtn.addEventListener("click", () => {
+    const wrongAnswer = wrongAnswerInput.value.trim();
+    if (wrongAnswer.length < 1) {
+      wrongAnswerInput.focus();
+      return;
+    }
+    saveWrongAnswer(sentence, wrongAnswer, wrongAnswerStatus, wrongAnswerInput);
+  });
+
+  wrongAnswerInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      saveWrongBtn.click();
     }
   });
 
@@ -579,6 +606,46 @@ function updateRecordButtonState(recordBtn, container, isRecorded) {
 async function checkAndUpdateRecordStatus(sentence, recordBtn, container) {
   const isRecorded = await isQuestionRecorded(sentence);
   updateRecordButtonState(recordBtn, container, isRecorded);
+}
+
+// 错误答案相关功能
+async function saveWrongAnswer(correctSentence, wrongAnswer, statusEl, inputEl) {
+  try {
+    statusEl.innerHTML = `<span class="spinner"></span> 保存中...`;
+    
+    await recordWrongAnswer(correctSentence, wrongAnswer);
+    
+    statusEl.innerHTML = `<span style="color: #16a34a;">已保存错误答案</span>`;
+    inputEl.value = "";
+    
+    setTimeout(() => {
+      statusEl.innerHTML = "";
+    }, 3000);
+  } catch (error) {
+    console.error("保存错误答案失败:", error);
+    statusEl.innerHTML = `<span style="color: #ef4444;">保存失败</span>`;
+    
+    setTimeout(() => {
+      statusEl.innerHTML = "";
+    }, 3000);
+  }
+}
+
+async function recordWrongAnswer(correctSentence, wrongAnswer) {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(["wrongAnswers"], (result) => {
+      const wrongAnswers = result.wrongAnswers || [];
+      
+      wrongAnswers.push({
+        id: hash(correctSentence + wrongAnswer + Date.now()),
+        correctSentence,
+        wrongAnswer,
+        timestamp: new Date().toISOString()
+      });
+      
+      chrome.storage.sync.set({ wrongAnswers: wrongAnswers }, resolve);
+    });
+  });
 }
 
 function initObserver() {
